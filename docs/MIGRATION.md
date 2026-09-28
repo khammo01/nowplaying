@@ -3,7 +3,7 @@
 Do not clone over, reset, or replace the Mac mini's existing `~/NowPlaying` directory. Its source may contain changes absent from the first repository commit.
 
 1. Stop its polling loop in the terminal before the final switch. Keep the old directory as a complete, private backup; it contains credentials.
-2. Clone the GitHub repository into a separate sibling directory, such as `~/NowPlaying-sync`.
+2. Run `git clone https://github.com/khammo01/nowplaying.git ~/NowPlaying-sync` to clone into a separate sibling directory.
 3. In the clone, create a reconciliation branch (`git switch -c reconcile-mac-mini`). Decompile the mini's two active scripts into an **ignored** directory in the clone:
 
    ```sh

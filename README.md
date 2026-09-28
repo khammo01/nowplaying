@@ -6,7 +6,7 @@ macOS media detection for Music, Safari (YouTube and other sites), and VLC. Publ
 
 Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` tools. Install VLC if you want its sensor. AppleScript compilation may require VLC to be installed. Safari must allow JavaScript from Apple Events; grant the launching terminal the Automation permissions requested for the media apps/System Events.
 
-1. Clone the repository to `~/NowPlaying` on a new computer. For an existing installation, follow [migration instructions](docs/MIGRATION.md) first.
+1. Clone [khammo01/nowplaying](https://github.com/khammo01/nowplaying) to `~/NowPlaying` on a new computer (`git clone https://github.com/khammo01/nowplaying.git ~/NowPlaying`). For an existing installation, follow [migration instructions](docs/MIGRATION.md) first.
 2. Copy `config.example.sh` to `config.local.sh`, run `chmod 600 config.local.sh`, and fill in this computer's Home Assistant settings. Use the appropriate audio entity for each Mac. If both Macs share an entity/webhook, they can overwrite one another's state.
 3. Set `SSH_KEY` to a local key authorized to copy artwork to the configured Home Assistant server. The default is `ssh/id_ecdsa_ha` beneath the checkout. Keys must be provisioned separately; they never sync through Git.
 4. Run `./scripts/check.sh`, then `./NowPlaying.sh`.
@@ -25,6 +25,8 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 The runner executes readable `.applescript` source directly. Edit and commit those files, not compiled `.scpt` files. No build is needed to run. Old compiled files on an existing Mac are ignored compatibility artifacts for an already-running older loop.
 
 ## Sync changes
+
+For pushing, authenticate Git on each Mac separately (for example, install GitHub CLI and run `gh auth login`). Browser sign-in alone does not authenticate command-line Git.
 
 Before editing, run `./scripts/update.sh`. After making changes:
 
