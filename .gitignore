@@ -1,0 +1,15 @@
+# Allowlist the source tree. Everything local stays private by default.
+/*
+!/.gitignore
+!/NowPlaying.sh
+!/*.applescript
+!/config.example.sh
+!/default_music.jpg
+!/README.md
+!/docs/
+!/scripts/
+!/tests/
+!/.github/
+.DS_Store
+__pycache__/
+*.pyc

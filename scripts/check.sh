@@ -1,0 +1,12 @@
+#!/bin/bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TMP_CHECK="$(mktemp -d)"
+trap 'rm -rf "$TMP_CHECK"' EXIT
+bash -n "$ROOT/NowPlaying.sh" "$ROOT/config.example.sh" "$ROOT/scripts/check.sh" "$ROOT/scripts/update.sh"
+for name in safari_youtube_nowplaying VLC_nowplaying; do
+    osacompile -o "$TMP_CHECK/$name.scpt" "$ROOT/$name.applescript"
+done
+python3 "$ROOT/tests/check_playback.py"
+python3 "$ROOT/tests/check_shell.py"
+echo "All checks passed (no Home Assistant requests sent)."
