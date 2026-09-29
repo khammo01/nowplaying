@@ -1,10 +1,10 @@
 # NowPlaying
 
-macOS media detection for Music, Safari (YouTube and other sites), and VLC. Publishes playback state and artwork to Home Assistant and displays status in a terminal.
+macOS media detection for Music, Safari, Google Chrome, and VLC. Publishes playback state and artwork to Home Assistant and displays status in a terminal.
 
 ## Setup
 
-Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` tools. Install VLC if you want its sensor. AppleScript compilation may require VLC to be installed. Safari must allow JavaScript from Apple Events; grant the launching terminal the Automation permissions requested for the media apps/System Events.
+Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` tools. Install VLC if you want its sensor. AppleScript compilation may require VLC to be installed. Safari must allow JavaScript from Apple Events; Chrome users must enable **View → Developer → Allow JavaScript from Apple Events**. Grant the launching terminal the Automation permissions requested for browsers, media apps, and System Events.
 
 1. Clone [khammo01/nowplaying](https://github.com/khammo01/nowplaying) to `~/NowPlaying` on a new computer (`git clone https://github.com/khammo01/nowplaying.git ~/NowPlaying`). For an existing installation, follow [migration instructions](docs/MIGRATION.md) first.
 2. Copy `config.example.sh` to `config.local.sh`, run `chmod 600 config.local.sh`, and fill in this computer's Home Assistant settings. Use the appropriate audio entity for each Mac. If both Macs share an entity/webhook, they can overwrite one another's state.
@@ -16,10 +16,10 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 ## Files
 
 - `NowPlaying.sh`: polling, Music sensor, state normalization, artwork, Home Assistant output, terminal display.
-- `safari_youtube_nowplaying.applescript`: tab selection and Safari metadata. NYTimes/Washington Post video elements qualify only when duration is at least 10 seconds; unknown lengths wait, live streams qualify, and audio is unaffected. Media Session alone cannot activate those news sites. This is a duration filter, not a universal user-gesture detector.
+- `safari_youtube_nowplaying.applescript`: cached fast-path and full-tab discovery across Safari and Chrome, iframe-aware media detection, YouTube/Shorts metadata, and generic-site metadata. Nextdoor is suppressed. NYTimes/Washington Post video elements qualify only when duration is at least 10 seconds; unknown lengths wait, live streams qualify, and audio is unaffected. Media Session alone cannot activate those news sites. This is a duration filter, not a universal user-gesture detector.
 - `VLC_nowplaying.applescript`: VLC metadata and optional OMDb lookup; reads the exported `OMDB_API_KEY`.
 - `default_music.jpg`: fallback artwork used by the shell.
-- `scripts/check.sh`: syntax, AppleScript compilation, 112 Safari playback checks, and isolated shell orchestration tests with mocked network calls.
+- `scripts/check.sh`: syntax, AppleScript compilation, 118 browser playback checks, and isolated shell orchestration tests with mocked network calls.
 - `scripts/update.sh`: refuses uncommitted changes, pulls using `--ff-only`, and validates the result. It never auto-merges or discards local changes.
 
 The runner executes readable `.applescript` source directly. Edit and commit those files, not compiled `.scpt` files. No build is needed to run. Old compiled files on an existing Mac are ignored compatibility artifacts for an already-running older loop.

@@ -1,7 +1,7 @@
 var location, document, navigator, window;
 let count=0;
-function check(host,durations,expected,tag='VIDEO',paused=false) {
- location={hostname:host,href:'https://'+host+'/article',pathname:'/article',origin:'https://'+host};
+function check(host,durations,expected,tag='VIDEO',paused=false,path='/article') {
+ location={hostname:host,href:'https://'+host+path,pathname:path,origin:'https://'+host};
  const media=durations.map(duration=>({tagName:tag,duration,paused,ended:false,readyState:4,currentTime:2,playbackRate:1}));
  document={querySelectorAll:()=>media,querySelector:()=>null,getElementById:()=>null,hasFocus:()=>true,visibilityState:'visible',title:'Article'};
  navigator={mediaSession:{playbackState:'playing',metadata:null}};
@@ -21,5 +21,8 @@ for(const host of ['nytimes.com','www.nytimes.com','washingtonpost.com','www.was
  check(host,[],false);
  check(host,[3],true,'AUDIO');
 }
-for(const host of ['example.com','notnytimes.com','nytimes.com.example.org','youtube.com'])check(host,[3],host!=='youtube.com');
+for(const host of ['example.com','notnytimes.com','nytimes.com.example.org','youtube.com'])check(host,[3],true);
+check('youtube.com',[30],false,'VIDEO',false,'/');
+check('nextdoor.com',[30],false);
+check('www.nextdoor.com',[30],false);
 console.log('Passed '+count+' playback checks across both JavaScript paths.');

@@ -17,4 +17,4 @@ Do not clone over, reset, or replace the Mac mini's existing `~/NowPlaying` dire
 6. Run `./scripts/check.sh`, review the staged diff for credentials, commit the reconciliation, and push the branch. Merge it to `main` after review, then update both Macs.
 7. With the old loop stopped, rename the old directory to a dated backup and move the reconciled clone to `~/NowPlaying`. Adjust `SSH_KEY` if it referred to a path moved during the switch. Start one copy of `./NowPlaying.sh` and check its Home Assistant output.
 
-Until step 4 is complete, the repository contains this Mac's version only. The mini's differences are not assumed to be duplicates or obsolete.
+The initial repository snapshot came from the work Mac. The reconciliation keeps the Mac mini's behavior as the baseline and carries forward the work Mac's 10-second NYTimes/Washington Post video filter. Keep the old mini directory as the private backup until the reconciled checkout has run successfully with its local configuration.

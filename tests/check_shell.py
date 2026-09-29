@@ -21,7 +21,7 @@ OMDB_API_KEY=test-only
         mock = root / 'bin'
         mock.mkdir()
         commands = {
-            'sleep': '#!/bin/bash\nif [[ "$1" == "3.8" ]]; then kill -TERM "$PPID"; fi\n',
+            'sleep': '#!/bin/bash\nkill -TERM "$PPID"\n',
             'osascript': '#!/bin/bash\ncase "${1:-}" in\n*safari*) echo \'{"playing":' + str(playing).lower() + ',"title":"Test video","duration":60,"currentTime":2}\';;\n*) echo \'{"playing":false}\';;\nesac\n',
             'pmset': '#!/bin/bash\nexit 0\n',
             'ps': '#!/bin/bash\necho "2.5 coreaudiod"\n',

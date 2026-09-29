@@ -10,8 +10,12 @@ source = (ROOT / 'safari_youtube_nowplaying.applescript').read_text()
 expressions = []
 for name in ('probeJS', 'js'):
     start = source.index('set ' + name + ' to ')
-    end = source.index('\n\t\t\n', start)
-    chunks = re.findall(r'"(?:\\.|[^"\\])*"', source[start:end])
+    assignment = []
+    for line in source[start:].splitlines():
+        assignment.append(line)
+        if '& linefeed &' not in line and re.search(r'"\s*$', line):
+            break
+    chunks = re.findall(r'"(?:\\.|[^"\\])*"', '\n'.join(assignment))
     expressions.append('\n'.join(json.loads(c) for c in chunks))
 with tempfile.TemporaryDirectory() as temp:
     script = Path(temp) / 'playback.js'

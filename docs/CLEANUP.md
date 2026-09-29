@@ -31,4 +31,4 @@ The two active `.scpt` files remain ignored in the project root for compatibilit
 
 ## Remaining limits
 
-This was a dependency/credential cleanup, not a rewrite of playback arbitration. The legacy shell still labels generic Safari/VLC output as YouTube, and has overlapping idle/CoreAudio normalization. Concurrent Music and Safari playback can mix source labels/metadata; changing the arbitration needs a separate explicit behavior decision and regression cases. External requests also retain the original retry/timeout behavior. The Mac mini's different version must be compared before further refactoring or deployment there.
+The Mac mini reconciliation replaced the initial polling/arbitration behavior while retaining the credential separation and readable source layout. The shell still uses the historical `youtube_playing` field for generic browser and VLC output, so the name is broader than its actual meaning. Concurrent Music and browser playback follows the Mac mini's existing precedence and has not been redesigned. External requests also retain the original retry/timeout behavior.
