@@ -1066,6 +1066,18 @@ with timeout of 12 seconds
 		"   text('#description yt-attributed-string')||" & linefeed & ¬
 		"   '';" & linefeed & ¬
 		"" & linefeed & ¬
+		" const normalizedRawDesc=rawDomDesc.replace(/\\s+/g,' ').trim();" & linefeed & ¬
+		" const aiSummaryMarker='AI-generated video summary';" & linefeed & ¬
+		" const aiSummaryIndex=normalizedRawDesc.indexOf(aiSummaryMarker);" & linefeed & ¬
+		" const aiSummary=aiSummaryIndex<0?'':normalizedRawDesc" & linefeed & ¬
+		"   .slice(aiSummaryIndex+aiSummaryMarker.length)" & linefeed & ¬
+		"   .split('Transcript')[0]" & linefeed & ¬
+		"   .split('Show transcript')[0]" & linefeed & ¬
+		"   .split('Ask questions')[0]" & linefeed & ¬
+		"   .replace(/^[:\\s-]+/,'')" & linefeed & ¬
+		"   .replace(/How was this summary\\??.*$/i,'')" & linefeed & ¬
+		"   .trim();" & linefeed & ¬
+		"" & linefeed & ¬
 		" const domDesc=rawDomDesc" & linefeed & ¬
 		"   .split('…more')[0]" & linefeed & ¬
 		"   .split('...more')[0]" & linefeed & ¬
@@ -1086,7 +1098,7 @@ with timeout of 12 seconds
 		"   .replace(/\\s+/g,' ')" & linefeed & ¬
 		"   .trim();" & linefeed & ¬
 		"" & linefeed & ¬
-		" const description=isShorts" & linefeed & ¬
+		" const literalDescription=isShorts" & linefeed & ¬
 		"   ? (" & linefeed & ¬
 		"       shortDomDesc||" & linefeed & ¬
 		"       (playerDataMatchesCurrent?(vd.shortDescription||''):'')||" & linefeed & ¬
@@ -1102,6 +1114,18 @@ with timeout of 12 seconds
 		"       meta('meta[property=\"og:description\"]')||" & linefeed & ¬
 		"       ''" & linefeed & ¬
 		"     );" & linefeed & ¬
+		" const looksPromotional=d=>{" & linefeed & ¬
+		"   const value=(d||'').trim();" & linefeed & ¬
+		"   const links=(value.match(/https?:\\/\\//gi)||[]).length;" & linefeed & ¬
+		"   const letters=value.replace(/[^A-Za-z]/g,'');" & linefeed & ¬
+		"   const caps=letters.length?letters.replace(/[^A-Z]/g,'').length/letters.length:0;" & linefeed & ¬
+		"   return links>=2||(links>=1&&value.length<220)||caps>.72;" & linefeed & ¬
+		" };" & linefeed & ¬
+		" const description=(aiSummary.length>=100&&(" & linefeed & ¬
+		"   looksPromotional(literalDescription)||" & linefeed & ¬
+		"   literalDescription.length<100||" & linefeed & ¬
+		"   aiSummary.length>literalDescription.length*1.35" & linefeed & ¬
+		" ))?aiSummary:literalDescription;" & linefeed & ¬
 		"" & linefeed & ¬
 		" let currentTime=0;" & linefeed & ¬
 		"" & linefeed & ¬

@@ -84,7 +84,7 @@ last_cache_cleanup=0
 media_status="Idle"; music_playing="false"; youtube_playing="false"; idle_start_epoch=""; idle_duration=0
 track="startup"; artist="startup"; album="startup"; genre="startup"; year="startup"; description="startup"
 thumbnail_url="/local/default_music.jpg"; duration_hms="00:00"; duration_sec=0; currentTime=0; currentTimehms="00:00"
-playback_speed="1.0"; playback_position_percent=0; progress_bar_full=""; playlist_name=""; video_id=""; url=""
+playback_speed="1.0"; playback_position_percent=0; volume_percent=0; progress_bar_full=""; playlist_name=""; video_id=""; url=""
 
 
 # ============================================================
@@ -755,7 +755,8 @@ emit_artwork() {
 
 emit_home_assistant() {
     debugecho "DEBUG Updating HA"
-    normalize_ints idle_duration playback_position_percent duration_sec currentTime youtube_video_count high_score
+    volume_percent=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || printf '0')
+    normalize_ints idle_duration playback_position_percent volume_percent duration_sec currentTime youtube_video_count high_score
     normalize_bools youtube_playing music_playing
     sanitize_vars track artist album genre year description media_status currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
@@ -769,6 +770,7 @@ emit_home_assistant() {
             --arg playlist "$playlist_name" --arg progress_bar_full "$progress_bar_full" --arg url "$url" --arg video_id "$video_id" --arg thumbnail "$thumbnail_url" --arg artwork_version "$artwork_version" \
             --argjson schema_version "$PAYLOAD_SCHEMA_VERSION" \
             --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson youtube_playing "$youtube_playing" \
+            --argjson volume_percent "$volume_percent" \
             --argjson music_app_playing "$music_playing" --argjson total_videos_watched "$youtube_video_count" --argjson high_score "$high_score" \
             --argjson video_duration "$duration_sec" '
             {
@@ -787,6 +789,7 @@ emit_home_assistant() {
                 currentTime: $currentTime,
                 duration: $duration,
                 playback_position_percent: $playback_position_percent,
+                volume_percent: $volume_percent,
                 playback_speed: $playback_speed,
                 youtube_playing: $youtube_playing,
                 music_app_playing: $music_app_playing,
