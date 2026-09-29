@@ -1067,15 +1067,19 @@ with timeout of 12 seconds
 		"   '';" & linefeed & ¬
 		"" & linefeed & ¬
 		" const normalizedRawDesc=rawDomDesc.replace(/\\s+/g,' ').trim();" & linefeed & ¬
+		" const directAiSummary=" & linefeed & ¬
+		"   text('#video-summary #content')||" & linefeed & ¬
+		"   text('#video-summary .videoSummaryContentViewModelParagraphContainer')||" & linefeed & ¬
+		"   text('#video-summary video-summary-content-view-model')||" & linefeed & ¬
+		"   '';" & linefeed & ¬
 		" const aiSummaryMarker='AI-generated video summary';" & linefeed & ¬
-		" const aiSummaryIndex=normalizedRawDesc.indexOf(aiSummaryMarker);" & linefeed & ¬
-		" const aiSummary=aiSummaryIndex<0?'':normalizedRawDesc" & linefeed & ¬
-		"   .slice(aiSummaryIndex+aiSummaryMarker.length)" & linefeed & ¬
-		"   .split('Transcript')[0]" & linefeed & ¬
-		"   .split('Show transcript')[0]" & linefeed & ¬
-		"   .split('Ask questions')[0]" & linefeed & ¬
-		"   .replace(/^[:\\s-]+/,'')" & linefeed & ¬
-		"   .replace(/How was this summary\\??.*$/i,'')" & linefeed & ¬
+		" const embeddedSummaryStart=normalizedRawDesc.indexOf('Summary');" & linefeed & ¬
+		" const embeddedSummaryEnd=normalizedRawDesc.indexOf(aiSummaryMarker);" & linefeed & ¬
+		" const embeddedAiSummary=(embeddedSummaryStart>=0&&embeddedSummaryEnd>embeddedSummaryStart)" & linefeed & ¬
+		"   ? normalizedRawDesc.slice(embeddedSummaryStart+'Summary'.length,embeddedSummaryEnd).trim()" & linefeed & ¬
+		"   : '';" & linefeed & ¬
+		" const aiSummary=(directAiSummary||embeddedAiSummary)" & linefeed & ¬
+		"   .replace(/\\s+/g,' ')" & linefeed & ¬
 		"   .trim();" & linefeed & ¬
 		"" & linefeed & ¬
 		" const domDesc=rawDomDesc" & linefeed & ¬
@@ -1114,18 +1118,7 @@ with timeout of 12 seconds
 		"       meta('meta[property=\"og:description\"]')||" & linefeed & ¬
 		"       ''" & linefeed & ¬
 		"     );" & linefeed & ¬
-		" const looksPromotional=d=>{" & linefeed & ¬
-		"   const value=(d||'').trim();" & linefeed & ¬
-		"   const links=(value.match(/https?:\\/\\//gi)||[]).length;" & linefeed & ¬
-		"   const letters=value.replace(/[^A-Za-z]/g,'');" & linefeed & ¬
-		"   const caps=letters.length?letters.replace(/[^A-Z]/g,'').length/letters.length:0;" & linefeed & ¬
-		"   return links>=2||(links>=1&&value.length<220)||caps>.72;" & linefeed & ¬
-		" };" & linefeed & ¬
-		" const description=(aiSummary.length>=100&&(" & linefeed & ¬
-		"   looksPromotional(literalDescription)||" & linefeed & ¬
-		"   literalDescription.length<100||" & linefeed & ¬
-		"   aiSummary.length>literalDescription.length*1.35" & linefeed & ¬
-		" ))?aiSummary:literalDescription;" & linefeed & ¬
+		" const description=aiSummary||literalDescription;" & linefeed & ¬
 		"" & linefeed & ¬
 		" let currentTime=0;" & linefeed & ¬
 		"" & linefeed & ¬
