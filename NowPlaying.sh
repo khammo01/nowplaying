@@ -9,7 +9,6 @@ debug_mode="false"
 debugecho() { [[ "${debug_mode:-false}" == "true" ]] && echo "$@"; }
 nodebug()   { [[ "${debug_mode:-false}" != "true" ]] && "$@"; }
 export JQ_COLORS="0"
-trap 'echo "Received termination signal, exiting..."; exit 0' SIGTERM SIGINT
 echo "Starting*** NagMenu NowPlaying ***"
 
 
@@ -21,6 +20,31 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"; NOWPLAYING_ROOT="$SCRIPT_DIR"; CACH
 SSH_ROOT="$NOWPLAYING_ROOT/ssh"; DEFAULT_ARTWORK="$NOWPLAYING_ROOT/default_music.jpg"
 MUSIC_ART_CACHE="$CACHE_ROOT/music_artwork"
 mkdir -p "$CACHE_ROOT" "$SSH_ROOT" "$MUSIC_ART_CACHE"
+LOCK_DIR="$CACHE_ROOT/nowplaying.lock"
+cleanup_lock() {
+    if [[ -f "$LOCK_DIR/pid" ]] && [[ "$(cat "$LOCK_DIR/pid" 2>/dev/null)" == "$$" ]]; then
+        rm -rf "$LOCK_DIR"
+    fi
+}
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    lock_pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
+    if [[ "$lock_pid" =~ ^[0-9]+$ ]] && kill -0 "$lock_pid" 2>/dev/null; then
+        echo "NowPlaying is already running as PID $lock_pid; exiting." >&2
+        exit 1
+    fi
+    rm -rf "$LOCK_DIR"
+    mkdir "$LOCK_DIR" || exit 1
+fi
+printf '%s\n' "$$" > "$LOCK_DIR/pid"
+trap 'cleanup_lock; echo "Received termination signal, exiting..."; exit 0' SIGTERM SIGINT
+sleep_pid=""
+request_immediate_poll() {
+    # BetterTouchTool calls this signal after a media command. Interrupt the
+    # adaptive polling sleep so fresh metadata reaches Home Assistant now.
+    [[ -n "${sleep_pid:-}" ]] && kill "$sleep_pid" 2>/dev/null || true
+}
+trap request_immediate_poll SIGUSR1
+trap cleanup_lock EXIT
 # ============================================================
 # Home Assistant / Network
 # ============================================================
@@ -72,6 +96,7 @@ last_thumbnail_url=""; last_known_track=""; last_known_artist=""; last_known_des
 last_known_youtube_active="false"; last_music_artwork_hash=""; last_music_artwork_key=""; last_ha_media_active_state=""
 last_ha_update_time_utc=""; last_ha_update_time_local="--:--:--.---"; last_emitted_state=""; last_idle_bucket=""
 current_idle_bucket=""
+artwork_version=""
 
 
 # ============================================================
@@ -137,7 +162,14 @@ clean_track_name() {
     '
 }
 send_artwork() {
-    scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$1" "$HA_SERVER:/config/www/nowplaying/artwork.jpg"
+    local source_file="$1" hash remote_temp
+    hash=$(shasum -a 256 "$source_file" 2>/dev/null | awk '{print $1}')
+    [[ -n "$hash" ]] || return 1
+    remote_temp="/config/www/nowplaying/.artwork.${hash}.$$.tmp"
+    scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$source_file" "$HA_SERVER:$remote_temp" || return 1
+    ssh -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$HA_SERVER" \
+        "mv '$remote_temp' /config/www/nowplaying/artwork.jpg" || return 1
+    artwork_version="$hash"
 }
 
 
@@ -602,7 +634,10 @@ should_emit() {
         last_emitted_state="$media_status"; last_idle_bucket=""; return 0
     fi
     if [[ "$media_status" == "Paused" ]]; then
-        last_emitted_state="Paused"; return 1
+        if [[ "$last_emitted_state" != "Paused" ]]; then
+            last_emitted_state="Paused"; last_idle_bucket="$current_idle_bucket"; return 0
+        fi
+        return 1
     fi
     if [[ "$media_status" == "Idle" &&
           "$last_emitted_state" != "Idle" ]]; then
@@ -680,17 +715,17 @@ emit_artwork() {
             if [[ "$thumbnail_url" == https://img.youtube.com/* &&
                   -n "$video_id" ]]; then
                 debugecho "DEBUG Emitting YouTube artwork"
-                download_youtube_thumbnail "$video_id"
+                download_youtube_thumbnail "$video_id" || return 1
             else
                 debugecho "DEBUG Emitting generic artwork"
-                download_generic_artwork "$thumbnail_url" || true
+                download_generic_artwork "$thumbnail_url" || return 1
             fi
             last_sent_video_id="$video_id"; last_thumbnail_url="$thumbnail_url"; last_music_artwork_key=""
         elif [[ -z "$thumbnail_url" &&
                 -n "$video_id" &&
                 "$video_id" != "$last_sent_video_id" ]]; then
             debugecho "DEBUG Emitting YouTube artwork by video_id"
-            download_youtube_thumbnail "$video_id"
+            download_youtube_thumbnail "$video_id" || return 1
             last_sent_video_id="$video_id"; last_music_artwork_key=""
         fi
         return
@@ -705,7 +740,7 @@ emit_artwork() {
         if [[ "$hash" != "$last_music_artwork_hash" ||
               -n "$last_thumbnail_url" ]]; then
             debugecho "DEBUG Emitting music artwork"
-            send_artwork "$art"
+            send_artwork "$art" || return 1
             last_music_artwork_hash="$hash"
         fi
         last_music_artwork_key="$artwork_key"; last_thumbnail_url=""; last_sent_video_id=""; return
@@ -722,7 +757,7 @@ emit_home_assistant() {
     debugecho "DEBUG Updating HA"
     normalize_ints idle_duration playback_position_percent duration_sec currentTime youtube_video_count high_score
     normalize_bools youtube_playing music_playing
-    sanitize_vars track artist album genre year description media_status currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url
+    sanitize_vars track artist album genre year description media_status currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
     local sent_at event_id
     sent_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -731,7 +766,7 @@ emit_home_assistant() {
         jq -n --arg source_device "$SOURCE_DEVICE" --arg sent_at "$sent_at" --arg event_id "$event_id" \
             --arg track "$track" --arg artist "$artist" --arg album "$album" --arg genre "$genre" --arg year "$year" --arg description "$description" \
             --arg media_status "$media_status" --arg currentTime "$currentTimehms" --arg duration "$duration_hms" --arg playback_speed "$playback_speed" \
-            --arg playlist "$playlist_name" --arg progress_bar_full "$progress_bar_full" --arg url "$url" --arg video_id "$video_id" --arg thumbnail "$thumbnail_url" \
+            --arg playlist "$playlist_name" --arg progress_bar_full "$progress_bar_full" --arg url "$url" --arg video_id "$video_id" --arg thumbnail "$thumbnail_url" --arg artwork_version "$artwork_version" \
             --argjson schema_version "$PAYLOAD_SCHEMA_VERSION" \
             --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson youtube_playing "$youtube_playing" \
             --argjson music_app_playing "$music_playing" --argjson total_videos_watched "$youtube_video_count" --argjson high_score "$high_score" \
@@ -766,7 +801,8 @@ emit_home_assistant() {
                 progress_bar_full: $progress_bar_full,
                 url: $url,
                 video_id: $video_id,
-                thumbnail: $thumbnail
+                thumbnail: $thumbnail,
+                artwork_version: $artwork_version
             }
             '
     )
@@ -1041,5 +1077,8 @@ while true; do
     loop_work_ms=$(( loop_end_ms - loop_start_ms ))
     profile_music_ms="$music_poll_ms"; profile_browser_ms="$browser_poll_ms"; profile_vlc_ms="$vlc_poll_ms"
     profile_ha_network_ms="$ha_network_ms"; profile_loop_work_ms="$loop_work_ms"
-    sleep "$next_check_interval"
+    sleep "$next_check_interval" &
+    sleep_pid=$!
+    wait "$sleep_pid" 2>/dev/null || true
+    sleep_pid=""
 done
