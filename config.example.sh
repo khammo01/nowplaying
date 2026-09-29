@@ -4,6 +4,8 @@ HA_BASE_URL="http://homeassistant.local:8123"
 HA_API_URL="http://homeassistant.local:8123/api/webhook/REPLACE_ME"
 HA_AUDIO_ENTITY="input_boolean.REPLACE_ME"
 BEARER_TOKEN="REPLACE_ME"
+# Stable name included in each webhook payload. Defaults to the Mac computer name.
+# SOURCE_DEVICE="office-mac-mini"
 # Optional: VLC movie metadata. Without a key, filename metadata is used.
 OMDB_API_KEY=""
 # Optional: defaults to $NOWPLAYING_ROOT/ssh/id_ecdsa_ha

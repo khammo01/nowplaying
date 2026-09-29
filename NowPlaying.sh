@@ -39,6 +39,8 @@ SSH_KEY="${SSH_KEY:-$SSH_ROOT/id_ecdsa_ha}"
 : "${HA_AUDIO_ENTITY:?Set HA_AUDIO_ENTITY in config.local.sh}"
 : "${BEARER_TOKEN:?Set BEARER_TOKEN in config.local.sh}"
 export OMDB_API_KEY="${OMDB_API_KEY:-}"
+SOURCE_DEVICE="${SOURCE_DEVICE:-$(scutil --get ComputerName 2>/dev/null || hostname -s)}"
+PAYLOAD_SCHEMA_VERSION=2
 for dependency in jq python3 curl osascript perl; do
     command -v "$dependency" >/dev/null || { echo "Missing dependency: $dependency" >&2; exit 1; }
 done
@@ -722,14 +724,23 @@ emit_home_assistant() {
     normalize_bools youtube_playing music_playing
     sanitize_vars track artist album genre year description media_status currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
+    local sent_at event_id
+    sent_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+    event_id="${SOURCE_DEVICE}-$(timestamp_ms)"
     payload=$(
-        jq -n --arg track "$track" --arg artist "$artist" --arg album "$album" --arg genre "$genre" --arg year "$year" --arg description "$description" \
+        jq -n --arg source_device "$SOURCE_DEVICE" --arg sent_at "$sent_at" --arg event_id "$event_id" \
+            --arg track "$track" --arg artist "$artist" --arg album "$album" --arg genre "$genre" --arg year "$year" --arg description "$description" \
             --arg media_status "$media_status" --arg currentTime "$currentTimehms" --arg duration "$duration_hms" --arg playback_speed "$playback_speed" \
             --arg playlist "$playlist_name" --arg progress_bar_full "$progress_bar_full" --arg url "$url" --arg video_id "$video_id" --arg thumbnail "$thumbnail_url" \
+            --argjson schema_version "$PAYLOAD_SCHEMA_VERSION" \
             --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson youtube_playing "$youtube_playing" \
             --argjson music_app_playing "$music_playing" --argjson total_videos_watched "$youtube_video_count" --argjson high_score "$high_score" \
             --argjson video_duration "$duration_sec" '
             {
+                schema_version: $schema_version,
+                event_id: $event_id,
+                source_device: $source_device,
+                sent_at: $sent_at,
                 track: $track,
                 artist: $artist,
                 album: $album,
@@ -760,9 +771,11 @@ emit_home_assistant() {
             '
     )
     http_code=$(
-        curl -sS -o "$resp_file" -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$payload" "$HA_API_URL"
+        curl -sS --connect-timeout 3 --max-time 8 --retry 2 --retry-delay 1 \
+            -o "$resp_file" -w "%{http_code}" -X POST \
+            -H "Content-Type: application/json" -d "$payload" "$HA_API_URL"
     )
-    if [[ "$http_code" == "200" ]]; then
+    if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
         debugecho "DEBUG HA Result: Success"
     else
         debugecho "DEBUG HA Result: Error - $http_code"

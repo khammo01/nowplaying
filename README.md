@@ -22,6 +22,8 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 - `scripts/check.sh`: syntax, AppleScript compilation, 118 browser playback checks, and isolated shell orchestration tests with mocked network calls.
 - `scripts/update.sh`: refuses uncommitted changes, pulls using `--ff-only`, and validates the result. It never auto-merges or discards local changes.
 
+Home Assistant receives one versioned JSON document per meaningful media update. Payloads include a schema version, event ID, source-device name, and send timestamp so Home Assistant can keep one canonical metadata sensor without reconstructing media state from many helpers. Webhook delivery uses bounded connection/response timeouts and limited retries; a slow Home Assistant instance cannot stall the polling loop indefinitely.
+
 The runner executes readable `.applescript` source directly. Edit and commit those files, not compiled `.scpt` files. No build is needed to run. Old compiled files on an existing Mac are ignored compatibility artifacts for an already-running older loop.
 
 ## Sync changes
