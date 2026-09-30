@@ -21,6 +21,11 @@ for(const host of ['nytimes.com','www.nytimes.com','washingtonpost.com','www.was
  check(host,[],false);
  check(host,[3],true,'AUDIO');
 }
+for(const host of ['google.com','www.google.com']) {
+ check(host,[30],false);
+ check(host,[30],false,'AUDIO');
+ check(host,[],false);
+}
 for(const host of ['example.com','notnytimes.com','nytimes.com.example.org','youtube.com'])check(host,[3],true);
 check('youtube.com',[30],false,'VIDEO',false,'/');
 check('nextdoor.com',[30],false);

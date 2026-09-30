@@ -82,7 +82,7 @@ last_cache_cleanup=0
 # ============================================================
 
 media_status="Idle"; music_playing="false"; youtube_playing="false"; idle_start_epoch=""; idle_duration=0
-track="startup"; artist="startup"; album="startup"; genre="startup"; year="startup"; description="startup"
+track="startup"; artist="startup"; album="startup"; genre="startup"; year="startup"; summary=""; description="startup"
 thumbnail_url="/local/default_music.jpg"; duration_hms="00:00"; duration_sec=0; currentTime=0; currentTimehms="00:00"
 playback_speed="1.0"; playback_position_percent=0; volume_percent=0; progress_bar_full=""; playlist_name=""; video_id=""; url=""
 
@@ -432,7 +432,7 @@ parse_music_json() {
 parse_video_json() {
     local json="$1" row
     local parsed_playing parsed_track parsed_artist parsed_album
-    local parsed_genre parsed_year parsed_description parsed_speed
+    local parsed_genre parsed_year parsed_summary parsed_description parsed_speed
     local parsed_duration parsed_position parsed_url parsed_video_id; local parsed_thumbnail parsed_playlist
     row=$(
         jq -r '
@@ -443,6 +443,7 @@ parse_video_json() {
                 (.album // .writer // ""),
                 (.genre // ""),
                 (.year // .parsed_year // ""),
+                (.summary // ""),
                 (.description // .plot // ""),
                 (.playbackRate // .playback_speed // 1.0),
                 (
@@ -461,13 +462,13 @@ parse_video_json() {
             | map(tostring | gsub("[\r\n]"; " ") | gsub("\u001f"; " "))
             | join("\u001f")
         ' <<< "$json" 2>/dev/null
-    ) || row=$'false\x1f\x1f\x1f\x1f\x1f\x1f\x1f1.0\x1f0\x1f0\x1f\x1f\x1f'
-    IFS=$'\x1f' read -r parsed_playing parsed_track parsed_artist parsed_album parsed_genre parsed_year parsed_description parsed_speed \
+    ) || row=$'false\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f1.0\x1f0\x1f0\x1f\x1f\x1f\x1f'
+    IFS=$'\x1f' read -r parsed_playing parsed_track parsed_artist parsed_album parsed_genre parsed_year parsed_summary parsed_description parsed_speed \
         parsed_duration parsed_position parsed_url parsed_video_id parsed_thumbnail parsed_playlist <<< "$row"
     youtube_playing="$parsed_playing"; normalize_bools youtube_playing
     if [[ "$youtube_playing" == "true" ]]; then
         track="$parsed_track"; artist="$parsed_artist"; album="$parsed_album"; genre="$parsed_genre"
-        year="$parsed_year"; description="$parsed_description"; playback_speed="${parsed_speed:-1.0}"
+        year="$parsed_year"; summary="$parsed_summary"; description="$parsed_description"; playback_speed="${parsed_speed:-1.0}"
         duration_sec="$parsed_duration"; currentTime="$parsed_position"; url="$parsed_url"; video_id="$parsed_video_id"
         thumbnail_url="$parsed_thumbnail"; playlist_name="$parsed_playlist"; normalize_ints duration_sec currentTime
     fi
@@ -758,14 +759,14 @@ emit_home_assistant() {
     volume_percent=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || printf '0')
     normalize_ints idle_duration playback_position_percent volume_percent duration_sec currentTime youtube_video_count high_score
     normalize_bools youtube_playing music_playing
-    sanitize_vars track artist album genre year description media_status currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
+    sanitize_vars track artist album genre year summary description media_status currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
     local sent_at event_id
     sent_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
     event_id="${SOURCE_DEVICE}-$(timestamp_ms)"
     payload=$(
         jq -n --arg source_device "$SOURCE_DEVICE" --arg sent_at "$sent_at" --arg event_id "$event_id" \
-            --arg track "$track" --arg artist "$artist" --arg album "$album" --arg genre "$genre" --arg year "$year" --arg description "$description" \
+            --arg track "$track" --arg artist "$artist" --arg album "$album" --arg genre "$genre" --arg year "$year" --arg summary "$summary" --arg description "$description" \
             --arg media_status "$media_status" --arg currentTime "$currentTimehms" --arg duration "$duration_hms" --arg playback_speed "$playback_speed" \
             --arg playlist "$playlist_name" --arg progress_bar_full "$progress_bar_full" --arg url "$url" --arg video_id "$video_id" --arg thumbnail "$thumbnail_url" --arg artwork_version "$artwork_version" \
             --argjson schema_version "$PAYLOAD_SCHEMA_VERSION" \
@@ -783,6 +784,7 @@ emit_home_assistant() {
                 album: $album,
                 genre: $genre,
                 year: $year,
+                summary: $summary,
                 description: $description,
                 media_status: $media_status,
                 idle_duration: $idle_duration,
@@ -980,7 +982,7 @@ while true; do
     music_poll_ms=$(( timing_end_ms - timing_start_ms ))
     debugecho "DEBUG Done checking Music."
     if [[ "$music_playing" == "true" ]]; then
-        description=""; url=""; video_id=""; thumbnail_url=""; playlist_name=""
+        summary=""; description=""; url=""; video_id=""; thumbnail_url=""; playlist_name=""
         debugecho "DEBUG Music playing track=$track"; debugecho "DEBUG Music playing artist=$artist"
     else
         debugecho "DEBUG Music not playing."

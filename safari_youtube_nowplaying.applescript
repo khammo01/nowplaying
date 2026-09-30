@@ -134,7 +134,8 @@ with timeout of 12 seconds
 		"" & linefeed & ¬
 		" // Ignore short autoplay video on news pages; audio remains eligible." & linefeed & ¬
 		" const newsSite=/(^|\\.)(nytimes\\.com|washingtonpost\\.com)$/.test(host);" & linefeed & ¬
-		" const media=allMedia.filter(m=>" & linefeed & ¬
+		" const ignoredMediaSite=/(^|\\.)google\\.com$/.test(host);" & linefeed & ¬
+		" const media=(ignoredMediaSite?[]:allMedia).filter(m=>" & linefeed & ¬
 		"   !newsSite||m.tagName!=='VIDEO'||m.duration>=10" & linefeed & ¬
 		" );" & linefeed & ¬
 		"" & linefeed & ¬
@@ -157,7 +158,7 @@ with timeout of 12 seconds
 		" const msPlaying=!!ms&&ms.playbackState==='playing';" & linefeed & ¬
 		"" & linefeed & ¬
 		" const playing=" & linefeed & ¬
-		"   ytHomepage" & linefeed & ¬
+		"   (ytHomepage||ignoredMediaSite)" & linefeed & ¬
 		"     ? false" & linefeed & ¬
 		"     : isYT" & linefeed & ¬
 		"       ? ((ps===1)||htmlPlaying)" & linefeed & ¬
@@ -828,7 +829,8 @@ with timeout of 12 seconds
 		"" & linefeed & ¬
 		" // Ignore short autoplay video on news pages; audio remains eligible." & linefeed & ¬
 		" const newsSite=/(^|\\.)(nytimes\\.com|washingtonpost\\.com)$/.test(host);" & linefeed & ¬
-		" const media=allMedia.filter(m=>" & linefeed & ¬
+		" const ignoredMediaSite=/(^|\\.)google\\.com$/.test(host);" & linefeed & ¬
+		" const media=(ignoredMediaSite?[]:allMedia).filter(m=>" & linefeed & ¬
 		"   !newsSite||m.tagName!=='VIDEO'||m.duration>=10" & linefeed & ¬
 		" );" & linefeed & ¬
 		"" & linefeed & ¬
@@ -1118,7 +1120,22 @@ with timeout of 12 seconds
 		"       meta('meta[property=\"og:description\"]')||" & linefeed & ¬
 		"       ''" & linefeed & ¬
 		"     );" & linefeed & ¬
-		" const description=aiSummary||literalDescription;" & linefeed & ¬
+		" const sanitizeDescription=value=>(value||'')" & linefeed & ¬
+		"   .split(/\\n+/)" & linefeed & ¬
+		"   .map(line=>line.trim())" & linefeed & ¬
+		"   .filter(line=>{" & linefeed & ¬
+		"     if(!line)return false;" & linefeed & ¬
+		"     if(/https?:\\/\\//i.test(line))return true;" & linefeed & ¬
+		"     if(/^#{1,}\\S/.test(line))return false;" & linefeed & ¬
+		"     if((line.match(/(^|\\s)#[A-Za-z0-9_]+/g)||[]).length>=3)return false;" & linefeed & ¬
+		"     if(/^(subscribe|follow (me|us)|connect with|socials?|merch|sponsor|use code|support (me|us)|business inquiries?)\\b/i.test(line))return false;" & linefeed & ¬
+		"     return true;" & linefeed & ¬
+		"   })" & linefeed & ¬
+		"   .join(' ')" & linefeed & ¬
+		"   .replace(/\\s+/g,' ')" & linefeed & ¬
+		"   .trim();" & linefeed & ¬
+		" const summary=aiSummary;" & linefeed & ¬
+		" const description=sanitizeDescription(literalDescription);" & linefeed & ¬
 		"" & linefeed & ¬
 		" let currentTime=0;" & linefeed & ¬
 		"" & linefeed & ¬
@@ -1236,9 +1253,11 @@ with timeout of 12 seconds
 		"" & linefeed & ¬
 		" const youtubeActuallyPlaying=playerState===1;" & linefeed & ¬
 		"" & linefeed & ¬
-		" const playing=isYoutube" & linefeed & ¬
-		"   ? (youtubeActuallyPlaying||html5Playing)" & linefeed & ¬
-		"   : (html5Playing||(!newsSite&&mediaSessionPlaying));" & linefeed & ¬
+		" const playing=ignoredMediaSite" & linefeed & ¬
+		"   ? false" & linefeed & ¬
+		"   : isYoutube" & linefeed & ¬
+		"     ? (youtubeActuallyPlaying||html5Playing)" & linefeed & ¬
+		"     : (html5Playing||(!newsSite&&mediaSessionPlaying));" & linefeed & ¬
 		"" & linefeed & ¬
 		" const playerClasses=mp?.className||'';" & linefeed & ¬
 		"" & linefeed & ¬
@@ -1259,6 +1278,7 @@ with timeout of 12 seconds
 		"   video_id," & linefeed & ¬
 		"   title," & linefeed & ¬
 		"   channel," & linefeed & ¬
+		"   summary," & linefeed & ¬
 		"   description," & linefeed & ¬
 		"   currentTime," & linefeed & ¬
 		"   duration," & linefeed & ¬
