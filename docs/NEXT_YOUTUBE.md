@@ -22,8 +22,9 @@ window/tab order. The transient timestamp is invalidated when the URL changes.
 
 Only the chosen tab is closed (Safari closes its window if that was its last
 tab). The next YouTube video in window/tab order is selected, wrapping around.
-Unrelated tabs are skipped. With no next video, the source is closed without
-sending a fullscreen key. If playback is blocked or focus changes, fullscreen
+Unrelated tabs are skipped. With no next video, the source is closed and the
+YouTube home page opens without sending a fullscreen key. The home page also
+opens when no YouTube video tabs exist or Safari is not running. If playback is blocked or focus changes, fullscreen
 is skipped. This requires the existing Safari JavaScript and System Events
 Automation permissions.
 
