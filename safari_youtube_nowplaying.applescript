@@ -113,6 +113,8 @@ with timeout of 12 seconds
 		"   /(^|\\.)youtube\\.com$/.test(host)||" & linefeed & ¬
 		"   /(^|\\.)youtu\\.be$/.test(host);" & linefeed & ¬
 		"" & linefeed & ¬
+		" if(isYT && Array.from(document.querySelectorAll('video')).some(v=>!v.paused&&!v.ended&&v.readyState>=2))" & linefeed & ¬
+		"   window.__nagmenuPlayback={url:location.href,at:Date.now()};" & linefeed & ¬
 		" const ytHomepage=" & linefeed & ¬
 		"   /(^|\\.)youtube\\.com$/.test(host)&&" & linefeed & ¬
 		"   location.pathname==='/';" & linefeed & ¬
