@@ -16,11 +16,11 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 ## Files
 
 - `NowPlaying.sh`: polling, Music sensor, state normalization, artwork, Home Assistant output, terminal display.
-- `safari_youtube_nowplaying.applescript`: cached fast-path and full-tab discovery across Safari and Chrome, iframe-aware media detection, YouTube/Shorts metadata, and generic-site metadata. Nextdoor is suppressed. NYTimes/Washington Post video elements qualify only when duration is at least 10 seconds; unknown lengths wait, live streams qualify, and audio is unaffected. Media Session alone cannot activate those news sites. This is a duration filter, not a universal user-gesture detector.
+- `safari_youtube_nowplaying.applescript`: cached fast-path and full-tab discovery across Safari and Chrome, iframe-aware media detection, YouTube/Shorts metadata, and generic-site metadata. Browser playback is restricted to dedicated media hosts; shopping, news, and other unlisted sites are ignored regardless of video length, embedded players, or Media Session state. Both discovery and metadata paths enforce the same policy.
 - `open_youtube_window.applescript`: brings forward the Safari window containing the most YouTube tabs and selects its first YouTube tab. If none are open, it opens the YouTube home page.
 - `VLC_nowplaying.applescript`: VLC metadata and optional OMDb lookup; reads the exported `OMDB_API_KEY`.
 - `default_music.jpg`: fallback artwork used by the shell.
-- `scripts/check.sh`: syntax, AppleScript compilation, 131 browser playback checks, and isolated shell orchestration tests with mocked network calls.
+- `scripts/check.sh`: syntax, AppleScript compilation, browser playback regression checks, and isolated shell orchestration tests with mocked network calls.
 - `scripts/update.sh`: refuses uncommitted changes, pulls using `--ff-only`, and validates the result. It never auto-merges or discards local changes.
 
 Home Assistant receives one versioned JSON document per meaningful media update. Payloads include a schema version, event ID, source-device name, and send timestamp so Home Assistant can keep one canonical metadata sensor without reconstructing media state from many helpers. Webhook delivery uses bounded connection/response timeouts and limited retries; a slow Home Assistant instance cannot stall the polling loop indefinitely.
@@ -51,3 +51,15 @@ When both computers have commits, do not force-push or reset away either copy. F
 The root `.gitignore` uses an allowlist. Local settings, SSH keys, certificates, credentials, state JSON, caches, logs, compiled scripts, and `local-archive/` are excluded. New top-level source files must be added to the allowlist deliberately. Review `git diff --cached` before committing; never use `git add -f` on private files.
 
 See [cleanup notes](docs/CLEANUP.md) for the migration archive and remaining implementation limitations.
+
+## Browser media allowlist
+
+Allowed services: YouTube (including Music), Netflix, Hulu, Disney+, Max/HBO Max,
+Prime Video, Apple TV, Peacock, Paramount+, Twitch, Vimeo, Dailymotion,
+Crunchyroll, Tubi, Pluto TV, Spotify, Apple Music, Amazon Music, SoundCloud,
+Pandora, Tidal, Deezer, Bandcamp, and Plex Web (`app.plex.tv`). Exact hosts and
+their subdomains match; lookalike suffixes do not. Amazon shopping pages are
+excluded; use `primevideo.com` or `music.amazon.com` for Amazon media.
+Intentional playback on any other site is also ignored. To add a service,
+update `mediaHosts` in both JavaScript paths and the playback regression cases.
+Native Music and VLC detection is unchanged.

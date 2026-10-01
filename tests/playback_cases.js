@@ -13,23 +13,29 @@ function check(host,durations,expected,tag='VIDEO',paused=false,path='/article')
   count++;
  }
 }
-for(const host of ['nytimes.com','www.nytimes.com','washingtonpost.com','www.washingtonpost.com']) {
- for(const d of [0,0.5,9,9.999,NaN])check(host,[d],false);
- for(const d of [10,10.1,120,Infinity])check(host,[d],true);
- check(host,[3,60],true);
- check(host,[60],false,'VIDEO',true);
- check(host,[],false);
+// Reject every playback signal on shopping, news, unknown and lookalike hosts.
+for(const host of ['amazon.com','www.amazon.com','amazon.co.uk','nytimes.com',
+ 'www.nytimes.com','washingtonpost.com','www.washingtonpost.com',
+ 'google.com','nextdoor.com','example.com','notyoutube.com',
+ 'youtube.com.example.org','spotify.com.evil.test']) {
+ for(const d of [0,3,10,120,Infinity,NaN])check(host,[d],false);
+ check(host,[120],false,'AUDIO');
+ check(host,[],false); // Media Session alone must not activate playback.
+}
+const allowed=['youtube.com','youtu.be','netflix.com','hulu.com','disneyplus.com',
+ 'max.com','hbomax.com','primevideo.com','tv.apple.com','peacocktv.com',
+ 'paramountplus.com','twitch.tv','vimeo.com','dailymotion.com','crunchyroll.com',
+ 'tubi.tv','pluto.tv','spotify.com','music.apple.com','music.amazon.com',
+ 'soundcloud.com','pandora.com','tidal.com','deezer.com','bandcamp.com','app.plex.tv'];
+for(const host of allowed){
+ check(host,[120],true);
+ check('www.'+host,[120],true);
  check(host,[3],true,'AUDIO');
 }
-for(const host of ['google.com','www.google.com']) {
- check(host,[30],false);
- check(host,[30],false,'AUDIO');
- check(host,[],false);
-}
-for(const host of ['example.com','notnytimes.com','nytimes.com.example.org','youtube.com'])check(host,[3],true);
 check('youtube.com',[30],false,'VIDEO',false,'/');
-check('nextdoor.com',[30],false);
-check('www.nextdoor.com',[30],false);
+check('music.youtube.com',[120],true,'AUDIO',false,'/watch');
+// An embedded player on an unlisted top-level site must remain ignored.
+check('amazon.com',[120,120],false);
 
 // Safari can retain ytInitialPlayerResponse and description DOM from the
 // previous watch page while movie_player already points at the new video.

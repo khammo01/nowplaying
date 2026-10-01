@@ -93,8 +93,18 @@ with timeout of 12 seconds
 	set probeJS to "(() => {" & linefeed & ¬
 		"try {" & linefeed & ¬
 		" const host=(location.hostname||'').toLowerCase();" & linefeed & ¬
-		" const blockedSite=" & linefeed & ¬
-		"   host==='nextdoor.com'||host.endsWith('.nextdoor.com');" & linefeed & ¬
+		" // Only dedicated media hosts may suppress voice notifications." & linefeed & ¬
+		" // Keep this policy identical in the probe and metadata paths." & linefeed & ¬
+		" const mediaHosts=[" & linefeed & ¬
+		"   'youtube.com','youtu.be','netflix.com','hulu.com','disneyplus.com'," & linefeed & ¬
+		"   'max.com','hbomax.com','primevideo.com','tv.apple.com'," & linefeed & ¬
+		"   'peacocktv.com','paramountplus.com','twitch.tv','vimeo.com'," & linefeed & ¬
+		"   'dailymotion.com','crunchyroll.com','tubi.tv','pluto.tv'," & linefeed & ¬
+		"   'spotify.com','music.apple.com','music.amazon.com'," & linefeed & ¬
+		"   'soundcloud.com','pandora.com','tidal.com','deezer.com'," & linefeed & ¬
+		"   'bandcamp.com','app.plex.tv'" & linefeed & ¬
+		" ];" & linefeed & ¬
+		" const blockedSite=!mediaHosts.some(domain=>host===domain||host.endsWith('.'+domain));" & linefeed & ¬
 		"" & linefeed & ¬
 		" if(blockedSite)" & linefeed & ¬
 		"   return '0|0|0|0|0|0|0|0|null';" & linefeed & ¬
@@ -132,12 +142,7 @@ with timeout of 12 seconds
 		"   try {allMedia.push(...d.querySelectorAll('video,audio'));} catch(e) {}" & linefeed & ¬
 		" }" & linefeed & ¬
 		"" & linefeed & ¬
-		" // Ignore short autoplay video on news pages; audio remains eligible." & linefeed & ¬
-		" const newsSite=/(^|\\.)(nytimes\\.com|washingtonpost\\.com)$/.test(host);" & linefeed & ¬
-		" const ignoredMediaSite=/(^|\\.)google\\.com$/.test(host);" & linefeed & ¬
-		" const media=(ignoredMediaSite?[]:allMedia).filter(m=>" & linefeed & ¬
-		"   !newsSite||m.tagName!=='VIDEO'||m.duration>=10" & linefeed & ¬
-		" );" & linefeed & ¬
+		" const media=allMedia;" & linefeed & ¬
 		"" & linefeed & ¬
 		" const htmlPlaying=media.some(m=>" & linefeed & ¬
 		"   !m.paused&&" & linefeed & ¬
@@ -158,11 +163,11 @@ with timeout of 12 seconds
 		" const msPlaying=!!ms&&ms.playbackState==='playing';" & linefeed & ¬
 		"" & linefeed & ¬
 		" const playing=" & linefeed & ¬
-		"   (ytHomepage||ignoredMediaSite)" & linefeed & ¬
+		"   ytHomepage" & linefeed & ¬
 		"     ? false" & linefeed & ¬
 		"     : isYT" & linefeed & ¬
 		"       ? ((ps===1)||htmlPlaying)" & linefeed & ¬
-		"       : (htmlPlaying||(!newsSite&&msPlaying));" & linefeed & ¬
+		"       : (htmlPlaying||msPlaying);" & linefeed & ¬
 		"" & linefeed & ¬
 		" let fullscreen=false;" & linefeed & ¬
 		" let pip=false;" & linefeed & ¬
@@ -780,8 +785,18 @@ with timeout of 12 seconds
 		"   isShorts:false" & linefeed & ¬
 		" });" & linefeed & ¬
 		"" & linefeed & ¬
-		" const blockedSite=" & linefeed & ¬
-		"   host==='nextdoor.com'||host.endsWith('.nextdoor.com');" & linefeed & ¬
+		" // Only dedicated media hosts may suppress voice notifications." & linefeed & ¬
+		" // Keep this policy identical in the probe and metadata paths." & linefeed & ¬
+		" const mediaHosts=[" & linefeed & ¬
+		"   'youtube.com','youtu.be','netflix.com','hulu.com','disneyplus.com'," & linefeed & ¬
+		"   'max.com','hbomax.com','primevideo.com','tv.apple.com'," & linefeed & ¬
+		"   'peacocktv.com','paramountplus.com','twitch.tv','vimeo.com'," & linefeed & ¬
+		"   'dailymotion.com','crunchyroll.com','tubi.tv','pluto.tv'," & linefeed & ¬
+		"   'spotify.com','music.apple.com','music.amazon.com'," & linefeed & ¬
+		"   'soundcloud.com','pandora.com','tidal.com','deezer.com'," & linefeed & ¬
+		"   'bandcamp.com','app.plex.tv'" & linefeed & ¬
+		" ];" & linefeed & ¬
+		" const blockedSite=!mediaHosts.some(domain=>host===domain||host.endsWith('.'+domain));" & linefeed & ¬
 		"" & linefeed & ¬
 		" if(blockedSite)return emptyResult();" & linefeed & ¬
 		"" & linefeed & ¬
@@ -827,12 +842,7 @@ with timeout of 12 seconds
 		"   try {allMedia.push(...d.querySelectorAll('video,audio'));} catch(e) {}" & linefeed & ¬
 		" }" & linefeed & ¬
 		"" & linefeed & ¬
-		" // Ignore short autoplay video on news pages; audio remains eligible." & linefeed & ¬
-		" const newsSite=/(^|\\.)(nytimes\\.com|washingtonpost\\.com)$/.test(host);" & linefeed & ¬
-		" const ignoredMediaSite=/(^|\\.)google\\.com$/.test(host);" & linefeed & ¬
-		" const media=(ignoredMediaSite?[]:allMedia).filter(m=>" & linefeed & ¬
-		"   !newsSite||m.tagName!=='VIDEO'||m.duration>=10" & linefeed & ¬
-		" );" & linefeed & ¬
+		" const media=allMedia;" & linefeed & ¬
 		"" & linefeed & ¬
 		" const text=s=>{" & linefeed & ¬
 		"   for(const d of docs){" & linefeed & ¬
@@ -1255,11 +1265,9 @@ with timeout of 12 seconds
 		"" & linefeed & ¬
 		" const youtubeActuallyPlaying=playerState===1;" & linefeed & ¬
 		"" & linefeed & ¬
-		" const playing=ignoredMediaSite" & linefeed & ¬
-		"   ? false" & linefeed & ¬
-		"   : isYoutube" & linefeed & ¬
+		" const playing=isYoutube" & linefeed & ¬
 		"     ? (youtubeActuallyPlaying||html5Playing)" & linefeed & ¬
-		"     : (html5Playing||(!newsSite&&mediaSessionPlaying));" & linefeed & ¬
+		"     : (html5Playing||mediaSessionPlaying);" & linefeed & ¬
 		"" & linefeed & ¬
 		" const playerClasses=mp?.className||'';" & linefeed & ¬
 		"" & linefeed & ¬
