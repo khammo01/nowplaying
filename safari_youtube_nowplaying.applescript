@@ -1080,7 +1080,9 @@ with timeout of 12 seconds
 		" const embeddedAiSummary=(embeddedSummaryStart>=0&&embeddedSummaryEnd>embeddedSummaryStart)" & linefeed & ¬
 		"   ? normalizedRawDesc.slice(embeddedSummaryStart+'Summary'.length,embeddedSummaryEnd).trim()" & linefeed & ¬
 		"   : '';" & linefeed & ¬
-		" const aiSummary=(directAiSummary||embeddedAiSummary)" & linefeed & ¬
+		" const pageMetadataMatchesCurrent=" & linefeed & ¬
+		"   !isYoutube||!urlVideoId||initialDataMatchesCurrent;" & linefeed & ¬
+		" const aiSummary=(pageMetadataMatchesCurrent?(directAiSummary||embeddedAiSummary):'')" & linefeed & ¬
 		"   .replace(/\\s+/g,' ')" & linefeed & ¬
 		"   .trim();" & linefeed & ¬
 		"" & linefeed & ¬
@@ -1113,11 +1115,11 @@ with timeout of 12 seconds
 		"       ''" & linefeed & ¬
 		"     )" & linefeed & ¬
 		"   : (" & linefeed & ¬
-		"       vd.shortDescription||" & linefeed & ¬
+		"       (playerDataMatchesCurrent?(vd.shortDescription||''):'')||" & linefeed & ¬
 		"       (initialDataMatchesCurrent?(initialVD.shortDescription||''):'')||" & linefeed & ¬
-		"       domDesc||" & linefeed & ¬
-		"       meta('meta[name=\"description\"]')||" & linefeed & ¬
-		"       meta('meta[property=\"og:description\"]')||" & linefeed & ¬
+		"       (pageMetadataMatchesCurrent?domDesc:'')||" & linefeed & ¬
+		"       (!isYoutube?meta('meta[name=\"description\"]'):'')||" & linefeed & ¬
+		"       (!isYoutube?meta('meta[property=\"og:description\"]'):'')||" & linefeed & ¬
 		"       ''" & linefeed & ¬
 		"     );" & linefeed & ¬
 		" const sanitizeDescription=value=>(value||'')" & linefeed & ¬

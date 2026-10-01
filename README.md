@@ -17,9 +17,10 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 
 - `NowPlaying.sh`: polling, Music sensor, state normalization, artwork, Home Assistant output, terminal display.
 - `safari_youtube_nowplaying.applescript`: cached fast-path and full-tab discovery across Safari and Chrome, iframe-aware media detection, YouTube/Shorts metadata, and generic-site metadata. Nextdoor is suppressed. NYTimes/Washington Post video elements qualify only when duration is at least 10 seconds; unknown lengths wait, live streams qualify, and audio is unaffected. Media Session alone cannot activate those news sites. This is a duration filter, not a universal user-gesture detector.
+- `open_youtube_window.applescript`: brings forward the Safari window containing the most YouTube tabs and selects its first YouTube tab. If none are open, it opens the YouTube home page.
 - `VLC_nowplaying.applescript`: VLC metadata and optional OMDb lookup; reads the exported `OMDB_API_KEY`.
 - `default_music.jpg`: fallback artwork used by the shell.
-- `scripts/check.sh`: syntax, AppleScript compilation, 118 browser playback checks, and isolated shell orchestration tests with mocked network calls.
+- `scripts/check.sh`: syntax, AppleScript compilation, 131 browser playback checks, and isolated shell orchestration tests with mocked network calls.
 - `scripts/update.sh`: refuses uncommitted changes, pulls using `--ff-only`, and validates the result. It never auto-merges or discards local changes.
 
 Home Assistant receives one versioned JSON document per meaningful media update. Payloads include a schema version, event ID, source-device name, and send timestamp so Home Assistant can keep one canonical metadata sensor without reconstructing media state from many helpers. Webhook delivery uses bounded connection/response timeouts and limited retries; a slow Home Assistant instance cannot stall the polling loop indefinitely.
@@ -41,7 +42,7 @@ git commit -m "Describe the change"
 git push
 ```
 
-On the other Mac, run `./scripts/update.sh`, then stop and restart the existing `NowPlaying.sh` process in its terminal. Source changes to AppleScripts are read on subsequent polls; shell and config changes require a restart. Keep one polling process per Mac.
+On the other Mac, run `./scripts/update.sh`, then stop and restart the existing `NowPlaying.sh` process in its terminal. Source changes to AppleScripts are read on subsequent polls; shell and config changes require a restart. Keep one polling process per Mac. YouTube descriptions and summaries are emitted only when their page metadata belongs to the current video, so cached metadata from a previous Safari page cannot be published as the current description.
 
 When both computers have commits, do not force-push or reset away either copy. Fetch, compare, and merge on a branch, resolve source conflicts, run checks, then push. The update helper intentionally stops if a fast-forward is impossible.
 
