@@ -774,7 +774,11 @@ with timeout of 12 seconds
 		"   video_id:''," & linefeed & ¬
 		"   title:''," & linefeed & ¬
 		"   channel:''," & linefeed & ¬
+		"   summary:''," & linefeed & ¬
 		"   description:''," & linefeed & ¬
+		"   view_count:''," & linefeed & ¬
+		"   published_date:''," & linefeed & ¬
+		"   subscriber_count:''," & linefeed & ¬
 		"   currentTime:0," & linefeed & ¬
 		"   duration:0," & linefeed & ¬
 		"   playbackRate:1," & linefeed & ¬
@@ -1078,6 +1082,7 @@ with timeout of 12 seconds
 		"   text('#description-inline-expander yt-attributed-string')||" & linefeed & ¬
 		"   text('#description-inline-expander-inline-content')||" & linefeed & ¬
 		"   text('#description yt-attributed-string')||" & linefeed & ¬
+		"   text('#description-inline-expander')||" & linefeed & ¬
 		"   '';" & linefeed & ¬
 		"" & linefeed & ¬
 		" const normalizedRawDesc=rawDomDesc.replace(/\\s+/g,' ').trim();" & linefeed & ¬
@@ -1092,8 +1097,11 @@ with timeout of 12 seconds
 		" const embeddedAiSummary=(embeddedSummaryStart>=0&&embeddedSummaryEnd>embeddedSummaryStart)" & linefeed & ¬
 		"   ? normalizedRawDesc.slice(embeddedSummaryStart+'Summary'.length,embeddedSummaryEnd).trim()" & linefeed & ¬
 		"   : '';" & linefeed & ¬
+		" const canonicalVideoId=parseVideoId(meta('link[rel=\"canonical\"]','href'));" & linefeed & ¬
+		" const canonicalMatchesCurrent=" & linefeed & ¬
+		"   !!urlVideoId&&!!canonicalVideoId&&canonicalVideoId===urlVideoId;" & linefeed & ¬
 		" const pageMetadataMatchesCurrent=" & linefeed & ¬
-		"   !isYoutube||!urlVideoId||initialDataMatchesCurrent;" & linefeed & ¬
+		"   !isYoutube||!urlVideoId||initialDataMatchesCurrent||canonicalMatchesCurrent;" & linefeed & ¬
 		" const aiSummary=(pageMetadataMatchesCurrent?(directAiSummary||embeddedAiSummary):'')" & linefeed & ¬
 		"   .replace(/\\s+/g,' ')" & linefeed & ¬
 		"   .trim();" & linefeed & ¬
@@ -1135,14 +1143,15 @@ with timeout of 12 seconds
 		"       ''" & linefeed & ¬
 		"     );" & linefeed & ¬
 		" const sanitizeDescription=value=>(value||'')" & linefeed & ¬
+		"   .split(/(?:🔔\\s*)?Subscribe for daily|Become a Channel Member|Join the Discussion on Discord|Official LTE Merch|Watch Next\\s*[–-]\\s*Related|Common Q&A|Follow me on social media|Thank you to our .*channel members|If you enjoyed this video/i)[0]" & linefeed & ¬
 		"   .split(/\\n+/)" & linefeed & ¬
 		"   .map(line=>line.trim())" & linefeed & ¬
 		"   .filter(line=>{" & linefeed & ¬
 		"     if(!line)return false;" & linefeed & ¬
-		"     if(/https?:\\/\\//i.test(line))return true;" & linefeed & ¬
 		"     if(/^#{1,}\\S/.test(line))return false;" & linefeed & ¬
 		"     if((line.match(/(^|\\s)#[A-Za-z0-9_]+/g)||[]).length>=3)return false;" & linefeed & ¬
 		"     if(/^(subscribe|follow (me|us)|connect with|socials?|merch|sponsor|use code|support (me|us)|business inquiries?)\\b/i.test(line))return false;" & linefeed & ¬
+		"     if(/https?:\\/\\//i.test(line))return true;" & linefeed & ¬
 		"     return true;" & linefeed & ¬
 		"   })" & linefeed & ¬
 		"   .join(' ')" & linefeed & ¬
@@ -1150,6 +1159,17 @@ with timeout of 12 seconds
 		"   .trim();" & linefeed & ¬
 		" const summary=aiSummary;" & linefeed & ¬
 		" const description=sanitizeDescription(literalDescription);" & linefeed & ¬
+		" const view_count=pageMetadataMatchesCurrent" & linefeed & ¬
+		"   ? (text('#info span.view-count')||text('ytd-watch-info-text #info span')||'')" & linefeed & ¬
+		"   : '';" & linefeed & ¬
+		" const publishedRaw=pageMetadataMatchesCurrent" & linefeed & ¬
+		"   ? (meta('meta[itemprop=\"datePublished\"]')||meta('meta[itemprop=\"uploadDate\"]')||text('#info-strings yt-formatted-string')||text('ytd-watch-info-text #info span:nth-child(3)')||'')" & linefeed & ¬
+		"   : '';" & linefeed & ¬
+		" const publishedParsed=publishedRaw?Date.parse(publishedRaw):NaN;" & linefeed & ¬
+		" const published_date=Number.isFinite(publishedParsed)?new Date(publishedParsed).toISOString():publishedRaw;" & linefeed & ¬
+		" const subscriber_count=pageMetadataMatchesCurrent" & linefeed & ¬
+		"   ? (text('#owner-sub-count')||text('#subscriber-count')||'')" & linefeed & ¬
+		"   : '';" & linefeed & ¬
 		"" & linefeed & ¬
 		" let currentTime=0;" & linefeed & ¬
 		"" & linefeed & ¬
@@ -1292,6 +1312,9 @@ with timeout of 12 seconds
 		"   channel," & linefeed & ¬
 		"   summary," & linefeed & ¬
 		"   description," & linefeed & ¬
+		"   view_count," & linefeed & ¬
+		"   published_date," & linefeed & ¬
+		"   subscriber_count," & linefeed & ¬
 		"   currentTime," & linefeed & ¬
 		"   duration," & linefeed & ¬
 		"   playbackRate," & linefeed & ¬

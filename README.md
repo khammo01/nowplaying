@@ -16,7 +16,7 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 ## Files
 
 - `NowPlaying.sh`: polling, Music sensor, state normalization, artwork, Home Assistant output, terminal display.
-- `safari_youtube_nowplaying.applescript`: cached fast-path and full-tab discovery across Safari and Chrome, iframe-aware media detection, YouTube/Shorts metadata, and generic-site metadata. Browser playback is restricted to dedicated media hosts; shopping, news, and other unlisted sites are ignored regardless of video length, embedded players, or Media Session state. Both discovery and metadata paths enforce the same policy.
+- `safari_youtube_nowplaying.applescript`: cached fast-path and full-tab discovery across Safari and Chrome, iframe-aware media detection, YouTube/Shorts metadata, AI summary, views, publish date, subscriber count, and generic-site metadata. Current canonical video IDs protect against stale YouTube SPA metadata. Browser playback is restricted to dedicated media hosts; shopping, news, and other unlisted sites are ignored regardless of video length, embedded players, or Media Session state. Both discovery and metadata paths enforce the same policy.
 - `open_youtube_window.applescript`: brings forward the Safari window containing the most YouTube tabs and selects its first YouTube tab. If none are open, it opens the YouTube home page.
 - `next_youtube_video.applescript`: closes the playing YouTube tab, or the most recently observed paused/ended video, then selects the next queued YouTube tab. Never sends fullscreen unless that destination starts playing. See [shortcut setup](docs/NEXT_YOUTUBE.md).
 - `VLC_nowplaying.applescript`: VLC metadata and optional OMDb lookup; reads the exported `OMDB_API_KEY`.

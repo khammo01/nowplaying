@@ -71,4 +71,18 @@ const staleResult=JSON.parse(eval(expressions[1]));
 if(staleResult.video_id!=='current123'||staleResult.description!==''||staleResult.summary!=='')
  throw Error(JSON.stringify({case:'stale-youtube-metadata',result:staleResult}));
 count++;
+
+// YouTube SPA navigation can update the canonical URL and visible summary
+// before ytInitialPlayerResponse. The canonical current-video ID makes that
+// visible metadata safe to use.
+const currentSummary='A concise current-video AI summary.';
+document.querySelector=s=>{
+ if(s==='link[rel="canonical"]')return {getAttribute:()=> 'https://www.youtube.com/watch?v=current123'};
+ if(s.includes('video-summary'))return {textContent:currentSummary,getAttribute:()=>''};
+ return null;
+};
+const canonicalResult=JSON.parse(eval(expressions[1]));
+if(canonicalResult.summary!==currentSummary)
+ throw Error(JSON.stringify({case:'canonical-current-youtube-metadata',result:canonicalResult}));
+count++;
 console.log('Passed '+count+' playback checks across both JavaScript paths.');
