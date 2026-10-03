@@ -59,6 +59,20 @@ on clear_nowplaying_cache()
 end clear_nowplaying_cache
 
 
+-- Reject ordinary web pages before asking Safari or Chrome to execute
+-- JavaScript in them. With many open tabs, crossing the app boundary for
+-- every page was the dominant cost of each NowPlaying poll.
+on is_media_url(theURL)
+	if theURL is missing value then return false
+	set u to theURL as string
+	set mediaHosts to {"youtube.com", "youtu.be", "netflix.com", "hulu.com", "disneyplus.com", "max.com", "hbomax.com", "primevideo.com", "tv.apple.com", "peacocktv.com", "paramountplus.com", "twitch.tv", "vimeo.com", "dailymotion.com", "crunchyroll.com", "tubi.tv", "pluto.tv", "spotify.com", "music.apple.com", "music.amazon.com", "soundcloud.com", "pandora.com", "tidal.com", "deezer.com", "bandcamp.com", "app.plex.tv"}
+	repeat with mediaHost in mediaHosts
+		if u contains (mediaHost as string) then return true
+	end repeat
+	return false
+end is_media_url
+
+
 with timeout of 12 seconds
 
 	-- ============================================================
@@ -279,7 +293,7 @@ with timeout of 12 seconds
 								set cachedURL to URL of cachedTab
 							end try
 
-							if cachedURL starts with "http://" or cachedURL starts with "https://" then
+							if my is_media_url(cachedURL) then
 
 								set probeResult to do JavaScript probeJS in cachedTab
 								set probeParts to my split_pipe(probeResult)
@@ -333,7 +347,7 @@ with timeout of 12 seconds
 								set cachedURL to URL of cachedTab
 							end try
 
-							if cachedURL starts with "http://" or cachedURL starts with "https://" then
+							if my is_media_url(cachedURL) then
 
 								set probeResult to execute cachedTab javascript probeJS
 								set probeParts to my split_pipe(probeResult)
@@ -392,7 +406,7 @@ with timeout of 12 seconds
 							set currentURL to URL of currentTab
 						end try
 
-						if currentURL starts with "http://" or currentURL starts with "https://" then
+						if my is_media_url(currentURL) then
 
 							set probeResult to do JavaScript probeJS in currentTab
 							set probeParts to my split_pipe(probeResult)
@@ -453,7 +467,7 @@ with timeout of 12 seconds
 							set currentURL to URL of currentTab
 						end try
 
-						if currentURL starts with "http://" or currentURL starts with "https://" then
+						if my is_media_url(currentURL) then
 
 							set probeResult to execute currentTab javascript probeJS
 							set probeParts to my split_pipe(probeResult)
@@ -512,7 +526,7 @@ with timeout of 12 seconds
 									set candidateURL to URL of t
 								end try
 
-								if candidateURL starts with "http://" or candidateURL starts with "https://" then
+								if my is_media_url(candidateURL) then
 
 									set probeResult to ""
 
@@ -587,7 +601,7 @@ with timeout of 12 seconds
 									set candidateURL to URL of t
 								end try
 
-								if candidateURL starts with "http://" or candidateURL starts with "https://" then
+								if my is_media_url(candidateURL) then
 
 									set probeResult to ""
 
@@ -653,9 +667,13 @@ with timeout of 12 seconds
 			try
 				tell application "Google Chrome"
 					if (count of windows) > 0 then
-						set selectedBrowser to "Google Chrome"
-						set selectedWindowIndex to 1
-						set selectedTabIndex to active tab index of front window
+						set candidateTabIndex to active tab index of front window
+						set candidateURL to URL of tab candidateTabIndex of front window
+						if my is_media_url(candidateURL) then
+							set selectedBrowser to "Google Chrome"
+							set selectedWindowIndex to 1
+							set selectedTabIndex to candidateTabIndex
+						end if
 					end if
 				end tell
 			end try
@@ -665,27 +683,26 @@ with timeout of 12 seconds
 			try
 				tell application "Safari"
 					if (count of windows) > 0 then
-						set selectedBrowser to "Safari"
-						set selectedWindowIndex to 1
-
 						set currentURL to ""
 
 						try
 							set currentURL to URL of current tab of front window
 						end try
 
-						set tabCount to count of tabs of front window
-
-						repeat with ti from 1 to tabCount
-							try
-								if URL of tab ti of front window is currentURL then
-									set selectedTabIndex to ti
-									exit repeat
-								end if
-							end try
-						end repeat
-
-						if selectedTabIndex = 0 then set selectedTabIndex to 1
+						if my is_media_url(currentURL) then
+							set selectedBrowser to "Safari"
+							set selectedWindowIndex to 1
+							set tabCount to count of tabs of front window
+							repeat with ti from 1 to tabCount
+								try
+									if URL of tab ti of front window is currentURL then
+										set selectedTabIndex to ti
+										exit repeat
+									end if
+								end try
+							end repeat
+							if selectedTabIndex = 0 then set selectedTabIndex to 1
+						end if
 					end if
 				end tell
 			end try
@@ -695,27 +712,26 @@ with timeout of 12 seconds
 			try
 				tell application "Safari"
 					if (count of windows) > 0 then
-						set selectedBrowser to "Safari"
-						set selectedWindowIndex to 1
-
 						set currentURL to ""
 
 						try
 							set currentURL to URL of current tab of front window
 						end try
 
-						set tabCount to count of tabs of front window
-
-						repeat with ti from 1 to tabCount
-							try
-								if URL of tab ti of front window is currentURL then
-									set selectedTabIndex to ti
-									exit repeat
-								end if
-							end try
-						end repeat
-
-						if selectedTabIndex = 0 then set selectedTabIndex to 1
+						if my is_media_url(currentURL) then
+							set selectedBrowser to "Safari"
+							set selectedWindowIndex to 1
+							set tabCount to count of tabs of front window
+							repeat with ti from 1 to tabCount
+								try
+									if URL of tab ti of front window is currentURL then
+										set selectedTabIndex to ti
+										exit repeat
+									end if
+								end try
+							end repeat
+							if selectedTabIndex = 0 then set selectedTabIndex to 1
+						end if
 					end if
 				end tell
 			end try
@@ -725,9 +741,13 @@ with timeout of 12 seconds
 			try
 				tell application "Google Chrome"
 					if (count of windows) > 0 then
-						set selectedBrowser to "Google Chrome"
-						set selectedWindowIndex to 1
-						set selectedTabIndex to active tab index of front window
+						set candidateTabIndex to active tab index of front window
+						set candidateURL to URL of tab candidateTabIndex of front window
+						if my is_media_url(candidateURL) then
+							set selectedBrowser to "Google Chrome"
+							set selectedWindowIndex to 1
+							set selectedTabIndex to candidateTabIndex
+						end if
 					end if
 				end tell
 			end try

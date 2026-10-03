@@ -37,11 +37,14 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
 fi
 printf '%s\n' "$$" > "$LOCK_DIR/pid"
 trap 'cleanup_lock; echo "Received termination signal, exiting..."; exit 0' SIGTERM SIGINT
-sleep_pid=""
+sleep_pid=""; browser_pid=""; immediate_poll_requested="false"
 request_immediate_poll() {
-    # BetterTouchTool calls this signal after a media command. Interrupt the
-    # adaptive polling sleep so fresh metadata reaches Home Assistant now.
+    # BetterTouchTool calls this signal after a media command. Interrupt either
+    # the adaptive sleep or a browser probe that has stopped responding, then
+    # skip the next sleep so fresh metadata reaches Home Assistant immediately.
+    immediate_poll_requested="true"
     [[ -n "${sleep_pid:-}" ]] && kill "$sleep_pid" 2>/dev/null || true
+    [[ -n "${browser_pid:-}" ]] && kill "$browser_pid" 2>/dev/null || true
 }
 trap request_immediate_poll SIGUSR1
 trap cleanup_lock EXIT
@@ -104,8 +107,8 @@ artwork_version=""
 # Profiling
 # ============================================================
 
-music_poll_ms=0; browser_poll_ms=0; vlc_poll_ms=0; ha_network_ms=0; loop_work_ms=0; profile_music_ms=0
-profile_browser_ms=0; profile_vlc_ms=0; profile_ha_network_ms=0; profile_loop_work_ms=0
+music_poll_ms=0; browser_poll_ms=0; vlc_poll_ms=0; ha_network_ms=0; loop_work_ms=0; sleep_ms=0; profile_music_ms=0
+profile_browser_ms=0; profile_vlc_ms=0; profile_ha_network_ms=0; profile_sleep_ms=0
 
 
 # ============================================================
@@ -914,7 +917,8 @@ emit_cli() {
         printf '\n\n\n\n\n'
         print_title_lines "$track" "     Track:           " 2
         echo "     Artist:          $artist"; echo "     Album:           $album"; echo "     Genre:           $genre"
-        echo "     Year:            $year"; echo "     Duration:        $currentTimehms / $duration_hms"; echo ""
+        [[ -n "$year" ]] && echo "     Year:            $year"
+        echo "     Duration:        $currentTimehms / $duration_hms"; echo ""
         cecho "   $progress_bar_full"
         printf '\n\n\n\n'
     elif [[ "$youtube_playing" == "true" ]]; then
@@ -961,7 +965,7 @@ emit_cli() {
     printf "     Last Polled Time: %-12s | Check Interval: %ss\n" "$last_polled_time" "$next_check_interval"
     echo "     Last HA Update Time: $last_ha_update_time_local"
     printf "     Timing: Music %dms | Browser %dms | VLC %dms | HA %dms | Sleep %dms\n" "$profile_music_ms" "$profile_browser_ms" "$profile_vlc_ms" "$profile_ha_network_ms" \
-        "$profile_loop_work_ms"
+        "$profile_sleep_ms"
     echo ""
 }
 
@@ -979,6 +983,7 @@ draw_startup_screen
 # ============================================================
 
 while true; do
+    immediate_poll_requested="false"
     loop_start_ms=$(timestamp_ms)
     loop_now_epoch=$(epoch_now)
     # ========================================================
@@ -1002,17 +1007,34 @@ while true; do
     # ========================================================
     debugecho "DEBUG Checking browser video..."
     timing_start_ms=$(timestamp_ms)
-    browser_json=$(
-        osascript "$NOWPLAYING_ROOT/safari_youtube_nowplaying.applescript" 2>/dev/null
-    )
-    parse_video_json "$browser_json"
+    if [[ "$music_playing" == "true" ]]; then
+        # Music.app is the authoritative active source. Avoid delaying its
+        # controller response on unrelated browser/PWA inspection.
+        youtube_playing="false"
+    else
+        browser_output="$CACHE_ROOT/browser-probe.$$.json"
+        : > "$browser_output"
+        osascript "$NOWPLAYING_ROOT/safari_youtube_nowplaying.applescript" \
+            > "$browser_output" 2>/dev/null &
+        browser_pid=$!
+        wait "$browser_pid" 2>/dev/null || true
+        browser_pid=""
+        browser_json=$(cat "$browser_output" 2>/dev/null)
+        rm -f "$browser_output"
+        # A controller refresh may interrupt this probe. Keep the last known
+        # browser state for this partial cycle; the signal also suppresses the
+        # sleep, so the next complete probe replaces it immediately.
+        if [[ -n "$browser_json" ]]; then
+            parse_video_json "$browser_json"
+        fi
+    fi
     timing_end_ms=$(timestamp_ms)
     browser_poll_ms=$(( timing_end_ms - timing_start_ms ))
     # ========================================================
     # SENSOR READ — VLC fallback
     # ========================================================
     vlc_poll_ms=0
-    if [[ "$youtube_playing" != "true" ]]; then
+    if [[ "$music_playing" != "true" && "$youtube_playing" != "true" ]]; then
         if pgrep -x "VLC" >/dev/null 2>&1; then
             debugecho "DEBUG VLC running. Checking VLC..."
             timing_start_ms=$(timestamp_ms)
@@ -1056,6 +1078,10 @@ while true; do
     build_progress_bar "$playback_position_percent"
     normalize_state "$loop_now_epoch"
     choose_check_interval
+    current_calendar_year=$(date '+%Y')
+    if [[ ! "$year" =~ ^[0-9]{4}$ ]] || (( 10#$year < 1900 || 10#$year > current_calendar_year + 1 )); then
+        year=""
+    fi
     debugecho "DEBUG Polling status=$media_status idle=${idle_duration}s next=${next_check_interval}s"
     if [[ "$media_status" == "Music" ||
           "$media_status" == "YouTube" ]]; then
@@ -1091,9 +1117,27 @@ while true; do
     loop_end_ms=$(timestamp_ms)
     loop_work_ms=$(( loop_end_ms - loop_start_ms ))
     profile_music_ms="$music_poll_ms"; profile_browser_ms="$browser_poll_ms"; profile_vlc_ms="$vlc_poll_ms"
-    profile_ha_network_ms="$ha_network_ms"; profile_loop_work_ms="$loop_work_ms"
-    sleep "$next_check_interval" &
-    sleep_pid=$!
-    wait "$sleep_pid" 2>/dev/null || true
-    sleep_pid=""
+    profile_ha_network_ms="$ha_network_ms"
+    # The selected interval is the target start-to-start cadence. Previously
+    # it was added after all poll work, turning a 3-second interval into 30+
+    # seconds whenever a browser scan was slow.
+    sleep_ms=$(python3 - "$next_check_interval" "$loop_work_ms" <<'PY'
+import sys
+target_ms = float(sys.argv[1]) * 1000
+work_ms = int(sys.argv[2])
+print(max(0, round(target_ms - work_ms)))
+PY
+)
+    [[ "$immediate_poll_requested" == "true" ]] && sleep_ms=0
+    profile_sleep_ms="$sleep_ms"
+    if (( sleep_ms > 0 )); then
+        sleep "$(python3 - "$sleep_ms" <<'PY'
+import sys
+print(int(sys.argv[1]) / 1000)
+PY
+)" &
+        sleep_pid=$!
+        wait "$sleep_pid" 2>/dev/null || true
+        sleep_pid=""
+    fi
 done
