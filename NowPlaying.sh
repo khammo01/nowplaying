@@ -262,6 +262,7 @@ download_generic_artwork() {
 enrich_vlc_episode_json() {
     local json="$1" parsed raw series season episode episode_title cache_key cache_file
     local show_json show_id episode_json seasons_json season_json poster summary show_name episode_name genres year metadata
+    local episode_code airdate airdate_display runtime rating episode_details
     raw=$(jq -r '.raw_name // .filename_guess // ""' <<< "$json" 2>/dev/null)
     parsed=$(python3 - "$raw" <<'PY'
 import os, re, sys
@@ -278,7 +279,9 @@ PY
     [[ -n "$series" && -n "$season" && -n "$episode" ]] || { printf '%s' "$json"; return; }
 
     mkdir -p "$CACHE_ROOT/vlc_metadata"
-    cache_key=$(printf '%s' "${series}|${season}|${episode}" | shasum -a 256 | awk '{print $1}')
+    # Include a schema suffix so richer episode descriptions replace older
+    # cached records that contained only the plot.
+    cache_key=$(printf '%s' "${series}|${season}|${episode}|episode-details-v2" | shasum -a 256 | awk '{print $1}')
     cache_file="$CACHE_ROOT/vlc_metadata/${cache_key}.json"
     if [[ -s "$cache_file" ]]; then
         metadata=$(cat "$cache_file")
@@ -301,9 +304,23 @@ PY
             episode_name=$(jq -r '.name // empty' <<< "$episode_json" 2>/dev/null)
             genres=$(jq -r '(.genres // []) | join(", ")' <<< "$show_json" 2>/dev/null)
             year=$(jq -r '(.premiered // "") | split("-")[0]' <<< "$show_json" 2>/dev/null)
+            episode_code=$(printf 'S%02dE%02d' "$season" "$episode")
+            airdate=$(jq -r '.airdate // empty' <<< "$episode_json" 2>/dev/null)
+            airdate_display="$airdate"
+            if [[ -n "$airdate" ]]; then
+                airdate_display=$(date -j -f '%Y-%m-%d' "$airdate" '+%B %-d, %Y' 2>/dev/null || printf '%s' "$airdate")
+            fi
+            runtime=$(jq -r '.runtime // empty' <<< "$episode_json" 2>/dev/null)
+            rating=$(jq -r '.rating.average // empty' <<< "$episode_json" 2>/dev/null)
+            episode_details="$episode_code"
+            [[ -n "$episode_name" ]] && episode_details+=" · $episode_name"
+            [[ -n "$airdate_display" ]] && episode_details+=" · $airdate_display"
+            [[ -n "$runtime" ]] && episode_details+=" · ${runtime} min"
+            [[ -n "$rating" ]] && episode_details+=" · Rating ${rating}"
+            [[ -n "$summary" ]] && episode_details+="  $summary"
             metadata=$(jq -nc \
                 --arg poster "$poster" --arg show "$show_name" --arg episode_name "$episode_name" \
-                --arg summary "$summary" --arg genres "$genres" --arg year "$year" \
+                --arg summary "$summary" --arg description "$episode_details" --arg genres "$genres" --arg year "$year" \
                 --arg season "$season" --arg episode "$episode" --arg fallback_title "$episode_title" '
                 {
                   poster: $poster,
@@ -316,7 +333,7 @@ PY
                   genre: $genres,
                   year: $year,
                   summary: $summary,
-                  description: $summary
+                  description: $description
                 } | with_entries(select(.value != ""))')
             if [[ -n "$poster" ]]; then
                 printf '%s\n' "$metadata" > "${cache_file}.tmp"
