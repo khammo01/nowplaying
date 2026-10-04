@@ -171,6 +171,15 @@ on run argv
 		return my javascript_on_target(targetParts, speedJS)
 	end if
 
+	-- Click YouTube's own captions control on the resolved tab. Activating the
+	-- browser and typing "c" first exits the macOS fullscreen space while the
+	-- video itself remains fullscreen, so the shortcut reaches the wrong view.
+	-- This preserves fullscreen and still uses YouTube's native caption track.
+	if commandName is "captions" then
+		set captionsJS to "(() => { const button=document.querySelector('.ytp-subtitles-button'); if(!button) return 'no-caption-button'; button.click(); const player=document.getElementById('movie_player'); if(player && typeof player.isSubtitlesOn==='function') return player.isSubtitlesOn() ? 'captions:on' : 'captions:off'; return button.getAttribute('aria-pressed')==='true' ? 'captions:on' : 'captions:off'; })()"
+		return my javascript_on_target(targetParts, captionsJS)
+	end if
+
 	set previousApp to ""
 	try
 		tell application "System Events" to set previousApp to name of first application process whose frontmost is true
@@ -178,9 +187,7 @@ on run argv
 	my select_target(targetParts)
 	delay 0.08
 
-	if commandName is "captions" then
-		tell application "System Events" to keystroke "c"
-	else if commandName is "fullscreen" then
+	if commandName is "fullscreen" then
 		tell application "System Events" to keystroke "f"
 	else if commandName is "playpause" then
 		tell application "System Events" to keystroke "k"
