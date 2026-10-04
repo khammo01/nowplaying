@@ -1199,7 +1199,7 @@ with timeout of 12 seconds
 		" const summary=aiSummary;" & linefeed & ¬
 		" const description=sanitizeDescription(literalDescription);" & linefeed & ¬
 		" const view_count=pageMetadataMatchesCurrent" & linefeed & ¬
-		"   ? (text('#info span.view-count')||text('ytd-watch-info-text #info span')||'')" & linefeed & ¬
+		"   ? (text('#info span.view-count')||text('ytd-watch-info-text #info span')||document.querySelector('[aria-label*=\"views\"]')?.getAttribute('aria-label')||'')" & linefeed & ¬
 		"   : '';" & linefeed & ¬
 		" const publishedRaw=pageMetadataMatchesCurrent" & linefeed & ¬
 		"   ? (meta('meta[itemprop=\"datePublished\"]')||meta('meta[itemprop=\"uploadDate\"]')||text('#info-strings yt-formatted-string')||text('ytd-watch-info-text #info span:nth-child(3)')||'')" & linefeed & ¬
