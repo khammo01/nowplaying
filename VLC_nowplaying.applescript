@@ -164,23 +164,23 @@ on probe_vlc()
 			end if
 			
 			try
-				set out_playing to («class AAPL» as text)
+				set out_playing to (playing as text)
 			end try
 			
 			try
-				set out_path to («class AAPA») as text
+				set out_path to (path of current item as text)
 			end try
 			
 			try
-				set out_name to («class AANA») as text
+				set out_name to (name of current item as text)
 			end try
 			
 			try
-				set out_duration to («class AADU») as text
+				set out_duration to (duration of current item as text)
 			end try
 			
 			try
-				set out_time to («class AACT») as text
+				set out_time to (current time as text)
 			end try
 		end tell
 	on error errMsg

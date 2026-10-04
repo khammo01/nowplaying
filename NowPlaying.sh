@@ -18,6 +18,7 @@ echo "Starting*** NagMenu NowPlaying ***"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"; NOWPLAYING_ROOT="$SCRIPT_DIR"; CACHE_ROOT="$NOWPLAYING_ROOT/cache"
 SSH_ROOT="$NOWPLAYING_ROOT/ssh"; DEFAULT_ARTWORK="$NOWPLAYING_ROOT/default_music.jpg"
+DEFAULT_VIDEO_ARTWORK="$NOWPLAYING_ROOT/default_video.jpg"
 MUSIC_ART_CACHE="$CACHE_ROOT/music_artwork"
 mkdir -p "$CACHE_ROOT" "$SSH_ROOT" "$MUSIC_ART_CACHE"
 LOCK_DIR="$CACHE_ROOT/nowplaying.lock"
@@ -88,7 +89,7 @@ media_status="Idle"; music_playing="false"; youtube_playing="false"; idle_start_
 track="startup"; artist="startup"; album="startup"; genre="startup"; year="startup"; summary=""; description="startup"
 view_count=""; published_date=""; subscriber_count=""
 thumbnail_url="/local/default_music.jpg"; duration_hms="00:00"; duration_sec=0; currentTime=0; currentTimehms="00:00"
-playback_speed="1.0"; playback_position_percent=0; volume_percent=0; progress_bar_full=""; playlist_name=""; video_id=""; url=""
+playback_speed="1.0"; playback_position_percent=0; volume_percent=0; progress_bar_full=""; playlist_name=""; video_id=""; url=""; media_source=""
 
 
 # ============================================================
@@ -96,7 +97,7 @@ playback_speed="1.0"; playback_position_percent=0; volume_percent=0; progress_ba
 # ============================================================
 
 youtube_video_count=0; high_score=0; last_video_id=""; last_video_timestamp=0; last_sent_video_id=""
-last_thumbnail_url=""; last_known_track=""; last_known_artist=""; last_known_description=""
+last_thumbnail_url=""; last_generic_artwork_key=""; last_known_track=""; last_known_artist=""; last_known_description=""
 last_known_youtube_active="false"; last_music_artwork_hash=""; last_music_artwork_key=""; last_ha_media_active_state=""
 last_ha_update_time_utc=""; last_ha_update_time_local="--:--:--.---"; last_emitted_state=""; last_idle_bucket=""
 current_idle_bucket=""
@@ -166,13 +167,26 @@ clean_track_name() {
     '
 }
 send_artwork() {
-    local source_file="$1" hash remote_temp
-    hash=$(shasum -a 256 "$source_file" 2>/dev/null | awk '{print $1}')
+    local source_file="$1" hash remote_temp controller_remote_temp
+    local publish_file="/tmp/nowplaying_artwork_publish.jpg"
+    local controller_file="/tmp/nowplaying_artwork_controller.jpg"
+    # Music.app frequently returns PNG artwork even though the shared HA path
+    # has a .jpg suffix. Normalize every source to a compact, genuine JPEG so
+    # small clients (including the rotary controller) can decode it quickly.
+    if ! sips -s format jpeg -s formatOptions 86 -Z 600 "$source_file" --out "$publish_file" >/dev/null 2>&1; then
+        cp "$source_file" "$publish_file" || return 1
+    fi
+    if ! sips -s format jpeg -s formatOptions 82 -Z 192 "$source_file" --out "$controller_file" >/dev/null 2>&1; then
+        cp "$publish_file" "$controller_file" || return 1
+    fi
+    hash=$(shasum -a 256 "$publish_file" 2>/dev/null | awk '{print $1}')
     [[ -n "$hash" ]] || return 1
     remote_temp="/config/www/nowplaying/.artwork.${hash}.$$.tmp"
-    scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$source_file" "$HA_SERVER:$remote_temp" || return 1
+    controller_remote_temp="/config/www/nowplaying/.controller-artwork.${hash}.$$.tmp"
+    scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$publish_file" "$HA_SERVER:$remote_temp" || return 1
+    scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$controller_file" "$HA_SERVER:$controller_remote_temp" || return 1
     ssh -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$HA_SERVER" \
-        "mv '$remote_temp' /config/www/nowplaying/artwork.jpg" || return 1
+        "mv '$remote_temp' /config/www/nowplaying/artwork.jpg && mv '$controller_remote_temp' /config/www/nowplaying/controller-artwork.jpg" || return 1
     artwork_version="$hash"
 }
 
@@ -243,6 +257,78 @@ download_generic_artwork() {
     curl -L -s --fail "$image_url" -o "$temp_file" || return 1
     [[ -s "$temp_file" ]] || return 1
     send_artwork "$temp_file"
+}
+
+enrich_vlc_episode_json() {
+    local json="$1" parsed raw series season episode episode_title cache_key cache_file
+    local show_json show_id episode_json seasons_json season_json poster summary show_name episode_name genres year metadata
+    raw=$(jq -r '.raw_name // .filename_guess // ""' <<< "$json" 2>/dev/null)
+    parsed=$(python3 - "$raw" <<'PY'
+import os, re, sys
+raw = os.path.splitext(os.path.basename(sys.argv[1]))[0]
+m = re.search(r'(?i)^(.*?)[\s._-]+s(\d{1,2})e(\d{1,2})(?:[\s._-]+(.*))?$', raw)
+if m:
+    clean = lambda s: re.sub(r'\s+', ' ', re.sub(r'[._-]+', ' ', s or '')).strip()
+    series = re.sub(r'\s*\((?:19|20)\d{2}\)\s*$', '', clean(m.group(1))).strip()
+    print('\x1f'.join((series, str(int(m.group(2))), str(int(m.group(3))), clean(m.group(4)))))
+PY
+    )
+    [[ -n "$parsed" ]] || { printf '%s' "$json"; return; }
+    IFS=$'\x1f' read -r series season episode episode_title <<< "$parsed"
+    [[ -n "$series" && -n "$season" && -n "$episode" ]] || { printf '%s' "$json"; return; }
+
+    mkdir -p "$CACHE_ROOT/vlc_metadata"
+    cache_key=$(printf '%s' "${series}|${season}|${episode}" | shasum -a 256 | awk '{print $1}')
+    cache_file="$CACHE_ROOT/vlc_metadata/${cache_key}.json"
+    if [[ -s "$cache_file" ]]; then
+        metadata=$(cat "$cache_file")
+    else
+        show_json=$(curl -L -sS --fail --max-time 4 --get \
+            --data-urlencode "q=$series" "https://api.tvmaze.com/singlesearch/shows" 2>/dev/null || printf '{}')
+        show_id=$(jq -r '.id // empty' <<< "$show_json" 2>/dev/null)
+        if [[ -n "$show_id" ]]; then
+            episode_json=$(curl -L -sS --fail --max-time 4 \
+                "https://api.tvmaze.com/shows/${show_id}/episodebynumber?season=${season}&number=${episode}" 2>/dev/null || printf '{}')
+            seasons_json=$(curl -L -sS --fail --max-time 4 \
+                "https://api.tvmaze.com/shows/${show_id}/seasons" 2>/dev/null || printf '[]')
+            season_json=$(jq -c --argjson n "$season" '[.[] | select(.number == $n)][0] // {}' <<< "$seasons_json" 2>/dev/null || printf '{}')
+            # TVMaze exposes episode landscape art, season art, and show art.
+            # Use them in that order so a missing episode still gets relevant art.
+            poster=$(jq -rn --argjson e "$episode_json" --argjson s "$season_json" --argjson h "$show_json" \
+                '$e.image.original // $e.image.medium // $s.image.original // $s.image.medium // $h.image.original // $h.image.medium // ""')
+            summary=$(jq -r '.summary // "" | gsub("<[^>]+>"; " ") | gsub("&amp;"; "&") | gsub("&quot;"; "\"") | gsub("[[:space:]]+"; " ") | sub("^ "; "") | sub(" $"; "")' <<< "$episode_json" 2>/dev/null)
+            show_name=$(jq -r '.name // empty' <<< "$show_json" 2>/dev/null)
+            episode_name=$(jq -r '.name // empty' <<< "$episode_json" 2>/dev/null)
+            genres=$(jq -r '(.genres // []) | join(", ")' <<< "$show_json" 2>/dev/null)
+            year=$(jq -r '(.premiered // "") | split("-")[0]' <<< "$show_json" 2>/dev/null)
+            metadata=$(jq -nc \
+                --arg poster "$poster" --arg show "$show_name" --arg episode_name "$episode_name" \
+                --arg summary "$summary" --arg genres "$genres" --arg year "$year" \
+                --arg season "$season" --arg episode "$episode" --arg fallback_title "$episode_title" '
+                {
+                  poster: $poster,
+                  thumbnail: $poster,
+                  channel: ($show // "VLC"),
+                  title: (if $episode_name != "" then $episode_name
+                          elif $fallback_title != "" then $fallback_title
+                          else $show end),
+                  album: ("Season " + $season + " · Episode " + $episode),
+                  genre: $genres,
+                  year: $year,
+                  summary: $summary,
+                  description: $summary
+                } | with_entries(select(.value != ""))')
+            if [[ -n "$poster" ]]; then
+                printf '%s\n' "$metadata" > "${cache_file}.tmp"
+                mv "${cache_file}.tmp" "$cache_file"
+            fi
+        fi
+    fi
+    if [[ -n "${metadata:-}" ]]; then
+        jq -c --argjson metadata "$metadata" '. * $metadata' <<< "$json" 2>/dev/null || printf '%s' "$json"
+    else
+        printf '%s' "$json"
+    fi
 }
 
 
@@ -435,6 +521,7 @@ parse_music_json() {
 }
 parse_video_json() {
     local json="$1" row
+    local source_kind="${2:-youtube}"
     local parsed_playing parsed_track parsed_artist parsed_album
     local parsed_genre parsed_year parsed_summary parsed_description parsed_speed
     local parsed_duration parsed_position parsed_url parsed_video_id; local parsed_thumbnail parsed_playlist
@@ -475,6 +562,7 @@ parse_video_json() {
         parsed_duration parsed_position parsed_url parsed_video_id parsed_thumbnail parsed_playlist parsed_view_count parsed_published_date parsed_subscriber_count <<< "$row"
     youtube_playing="$parsed_playing"; normalize_bools youtube_playing
     if [[ "$youtube_playing" == "true" ]]; then
+        media_source="$source_kind"
         track="$parsed_track"; artist="$parsed_artist"; album="$parsed_album"; genre="$parsed_genre"
         year="$parsed_year"; summary="$parsed_summary"; description="$parsed_description"; playback_speed="${parsed_speed:-1.0}"
         duration_sec="$parsed_duration"; currentTime="$parsed_position"; url="$parsed_url"; video_id="$parsed_video_id"
@@ -737,6 +825,17 @@ emit_artwork() {
             debugecho "DEBUG Emitting YouTube artwork by video_id"
             download_youtube_thumbnail "$video_id" || return 1
             last_sent_video_id="$video_id"; last_music_artwork_key=""
+        elif [[ "$media_source" == "vlc" && -z "$thumbnail_url" ]]; then
+            # VLC frequently has no poster metadata. Publishing a real placeholder
+            # for each newly loaded item prevents dashboards from retaining the
+            # previous browser/video artwork indefinitely.
+            local generic_key="vlc|${track}|${duration_sec}"
+            if [[ "$generic_key" != "$last_generic_artwork_key" ]]; then
+                debugecho "DEBUG Emitting VLC placeholder artwork"
+                send_artwork "$DEFAULT_VIDEO_ARTWORK" || return 1
+                last_generic_artwork_key="$generic_key"
+                last_thumbnail_url=""; last_sent_video_id=""; last_music_artwork_key=""
+            fi
         fi
         return
     fi
@@ -765,16 +864,23 @@ emit_artwork() {
 
 emit_home_assistant() {
     debugecho "DEBUG Updating HA"
-    volume_percent=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || printf '0')
+    # SoundSource can maintain a routed-device volume that differs from the
+    # macOS master value. Controller commands persist the confirmed target here.
+    local routed_volume_file="$CACHE_ROOT/soundsource-volume-percent"
+    if [[ -s "$routed_volume_file" ]]; then
+        volume_percent=$(<"$routed_volume_file")
+    else
+        volume_percent=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || printf '0')
+    fi
     normalize_ints idle_duration playback_position_percent volume_percent duration_sec currentTime youtube_video_count high_score
     normalize_bools youtube_playing music_playing
-    sanitize_vars track artist album genre year summary description view_count published_date subscriber_count media_status currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
+    sanitize_vars track artist album genre year summary description view_count published_date subscriber_count media_status media_source currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
     local sent_at event_id
     sent_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
     event_id="${SOURCE_DEVICE}-$(timestamp_ms)"
     payload=$(
-        jq -n --arg source_device "$SOURCE_DEVICE" --arg sent_at "$sent_at" --arg event_id "$event_id" \
+        jq -n --arg source_device "$SOURCE_DEVICE" --arg sent_at "$sent_at" --arg event_id "$event_id" --arg media_source "$media_source" \
             --arg track "$track" --arg artist "$artist" --arg album "$album" --arg genre "$genre" --arg year "$year" --arg summary "$summary" --arg description "$description" \
             --arg view_count "$view_count" --arg published_date "$published_date" --arg subscriber_count "$subscriber_count" \
             --arg media_status "$media_status" --arg currentTime "$currentTimehms" --arg duration "$duration_hms" --arg playback_speed "$playback_speed" \
@@ -800,6 +906,7 @@ emit_home_assistant() {
                 published_date: $published_date,
                 subscriber_count: $subscriber_count,
                 media_status: $media_status,
+                media_source: $media_source,
                 idle_duration: $idle_duration,
                 currentTime: $currentTime,
                 duration: $duration,
@@ -1025,7 +1132,7 @@ while true; do
         # browser state for this partial cycle; the signal also suppresses the
         # sleep, so the next complete probe replaces it immediately.
         if [[ -n "$browser_json" ]]; then
-            parse_video_json "$browser_json"
+            parse_video_json "$browser_json" "youtube"
         fi
     fi
     timing_end_ms=$(timestamp_ms)
@@ -1039,9 +1146,20 @@ while true; do
             debugecho "DEBUG VLC running. Checking VLC..."
             timing_start_ms=$(timestamp_ms)
             vlc_json=$(
-                osascript "$NOWPLAYING_ROOT/VLC_nowplaying.applescript" 2>/dev/null
+                OMDB_API_KEY="${OMDB_API_KEY:-}" \
+                    osascript "$NOWPLAYING_ROOT/VLC_nowplaying.applescript" 2>/dev/null
             )
-            parse_video_json "$vlc_json"
+            vlc_json=$(enrich_vlc_episode_json "$vlc_json")
+            # A VLC win replaces browser-specific fields rather than inheriting
+            # metadata from the last YouTube item.
+            track=""; artist=""; album=""; genre=""; year=""; summary=""; description=""
+            view_count=""; published_date=""; subscriber_count=""; playlist_name=""
+            video_id=""; thumbnail_url=""; url=""
+            parse_video_json "$vlc_json" "vlc"
+            if [[ -s "$CACHE_ROOT/vlc-playback-speed" ]]; then
+                playback_speed=$(cat "$CACHE_ROOT/vlc-playback-speed")
+            fi
+            [[ -n "$artist" ]] || artist="VLC"
             timing_end_ms=$(timestamp_ms)
             vlc_poll_ms=$(( timing_end_ms - timing_start_ms ))
         else
@@ -1068,7 +1186,7 @@ while true; do
     else
         playback_position_percent=0
     fi
-    if [[ "$youtube_playing" == "true" ]]; then
+    if [[ "$youtube_playing" == "true" && "$media_source" == "youtube" ]]; then
         debugecho "DEBUG Video playing. Running binge tracker."
         binge_watch_tracker "$loop_now_epoch"
     fi

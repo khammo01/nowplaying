@@ -44,7 +44,15 @@ end read_nowplaying_cache
 
 on write_nowplaying_cache(browserName, windowIndex, tabIndex)
 	set cacheFile to "/tmp/nagmenu_nowplaying_tab_cache"
-	set cacheData to browserName & "|" & windowIndex & "|" & tabIndex
+	set targetURL to ""
+	try
+		if browserName is "Safari" then
+			tell application "Safari" to set targetURL to URL of tab tabIndex of window windowIndex
+		else if browserName is "Google Chrome" then
+			tell application "Google Chrome" to set targetURL to URL of tab tabIndex of window windowIndex
+		end if
+	end try
+	set cacheData to browserName & "|" & windowIndex & "|" & tabIndex & "|" & targetURL
 
 	try
 		do shell script "printf %s " & quoted form of cacheData & " > " & quoted form of cacheFile
@@ -65,6 +73,9 @@ end clear_nowplaying_cache
 on is_media_url(theURL)
 	if theURL is missing value then return false
 	set u to theURL as string
+	-- A YouTube home/search page may contain autoplaying previews, but it is not
+	-- a controllable now-playing target. Only real video routes qualify.
+	if u contains "youtube.com" and not (u contains "youtube.com/watch" or u contains "youtube.com/shorts/") then return false
 	set mediaHosts to {"youtube.com", "youtu.be", "netflix.com", "hulu.com", "disneyplus.com", "max.com", "hbomax.com", "primevideo.com", "tv.apple.com", "peacocktv.com", "paramountplus.com", "twitch.tv", "vimeo.com", "dailymotion.com", "crunchyroll.com", "tubi.tv", "pluto.tv", "spotify.com", "music.apple.com", "music.amazon.com", "soundcloud.com", "pandora.com", "tidal.com", "deezer.com", "bandcamp.com", "app.plex.tv"}
 	repeat with mediaHost in mediaHosts
 		if u contains (mediaHost as string) then return true
@@ -127,7 +138,7 @@ with timeout of 12 seconds
 		"   /(^|\\.)youtube\\.com$/.test(host)||" & linefeed & ¬
 		"   /(^|\\.)youtu\\.be$/.test(host);" & linefeed & ¬
 		"" & linefeed & ¬
-		" if(isYT && Array.from(document.querySelectorAll('video')).some(v=>!v.paused&&!v.ended&&v.readyState>=2))" & linefeed & ¬
+		" if(isYT && location.pathname!=='/' && Array.from(document.querySelectorAll('video')).some(v=>!v.paused&&!v.ended&&v.readyState>=2))" & linefeed & ¬
 		"   window.__nagmenuPlayback={url:location.href,at:Date.now()};" & linefeed & ¬
 		" const ytHomepage=" & linefeed & ¬
 		"   /(^|\\.)youtube\\.com$/.test(host)&&" & linefeed & ¬
@@ -268,10 +279,13 @@ with timeout of 12 seconds
 			set cachedBrowser to item 1 of cachedParts
 			set cachedWindowIndex to item 2 of cachedParts as integer
 			set cachedTabIndex to item 3 of cachedParts as integer
+			set expectedCachedURL to ""
+			if (count of cachedParts) ≥ 4 then set expectedCachedURL to item 4 of cachedParts
 		on error
 			set cachedBrowser to ""
 			set cachedWindowIndex to 0
 			set cachedTabIndex to 0
+			set expectedCachedURL to ""
 		end try
 
 
@@ -293,7 +307,7 @@ with timeout of 12 seconds
 								set cachedURL to URL of cachedTab
 							end try
 
-							if my is_media_url(cachedURL) then
+							if my is_media_url(cachedURL) and (expectedCachedURL is "" or cachedURL is expectedCachedURL) then
 
 								set probeResult to do JavaScript probeJS in cachedTab
 								set probeParts to my split_pipe(probeResult)
@@ -347,7 +361,7 @@ with timeout of 12 seconds
 								set cachedURL to URL of cachedTab
 							end try
 
-							if my is_media_url(cachedURL) then
+							if my is_media_url(cachedURL) and (expectedCachedURL is "" or cachedURL is expectedCachedURL) then
 
 								set probeResult to execute cachedTab javascript probeJS
 								set probeParts to my split_pipe(probeResult)
@@ -760,6 +774,11 @@ with timeout of 12 seconds
 	if selectedBrowser is "" or selectedWindowIndex = 0 or selectedTabIndex = 0 then
 		return "{\"playing\":false}"
 	end if
+
+	-- Preserve the selected paused/recent media tab as the native keyboard
+	-- command target. The active-playing probe writes this earlier; this also
+	-- covers the fallback path after playback has paused or ended.
+	my write_nowplaying_cache(selectedBrowser, selectedWindowIndex, selectedTabIndex)
 
 
 	-- ============================================================

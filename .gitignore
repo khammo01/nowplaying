@@ -2,9 +2,11 @@
 /*
 !/.gitignore
 !/NowPlaying.sh
+!/media_seek_relative.sh
 !/*.applescript
 !/config.example.sh
 !/default_music.jpg
+!/default_video.jpg
 !/README.md
 !/docs/
 !/scripts/
