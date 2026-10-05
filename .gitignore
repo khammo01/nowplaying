@@ -3,7 +3,10 @@
 !/.gitignore
 !/NowPlaying.sh
 !/media_seek_relative.sh
+!/youtube_action_with_feedback.sh
 !/*.applescript
+!/assets/
+!/assets/youtube-click.wav
 !/config.example.sh
 !/default_music.jpg
 !/default_video.jpg

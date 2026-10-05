@@ -1,5 +1,8 @@
 -- Close the playing/last-played YouTube tab, then select the next queued video.
 -- Window IDs survive front-window reordering; tab indexes are adjusted after close.
+set cachedResult to my try_cached_advance()
+if cachedResult is not "" then return cachedResult
+
 set probeJS to "(() => {" & linefeed & ¬
 	" const host=location.hostname.toLowerCase();" & linefeed & ¬
 	" if(!/(^|\\.)youtube\\.com$/.test(host) || !/^\\/(watch|shorts)(\\/|$)/.test(location.pathname)) return '0|0';" & linefeed & ¬
@@ -61,8 +64,8 @@ tell application "Safari"
  activate
  do JavaScript "(() => {const v=document.querySelector('video'); if(v){if(document.activeElement)document.activeElement.blur(); v.setAttribute('tabindex','-1'); v.focus(); if(v.ended)v.currentTime=0; v.play().catch(()=>{});}})()" in tab targetTab of window id targetWindow
  -- Wait for this destination to play before sending the fullscreen shortcut.
- repeat 20 times
-  delay 0.25
+ repeat 30 times
+  delay 0.1
   if URL of current tab of front window is not targetURL or id of front window is not targetWindow then return "Selection changed; skipped fullscreen"
   set playbackState to do JavaScript "(() => {const v=document.querySelector('video'); return v&&!v.paused&&!v.ended ? (document.fullscreenElement||v.webkitDisplayingFullscreen?'fullscreen':'playing') : 'waiting';})()" in current tab of front window
   if playbackState = "fullscreen" then return "Advanced to next YouTube video"
@@ -75,6 +78,66 @@ tell application "Safari"
  end repeat
  return "Selected next YouTube video; playback did not start"
 end tell
+
+-- Fast path: NowPlaying already records the exact browser, tab index, and URL.
+-- Resolve that stable URL, enumerate only YouTube URLs (no per-tab JavaScript),
+-- then advance. The full probe below remains as recovery for a stale cache.
+on try_cached_advance()
+ try
+  set cacheText to do shell script "cat /tmp/nagmenu_nowplaying_tab_cache"
+  set oldDelimiters to AppleScript's text item delimiters
+  set AppleScript's text item delimiters to "|"
+  set fields to text items of cacheText
+  set AppleScript's text item delimiters to oldDelimiters
+  if (count of fields) < 4 or item 1 of fields is not "Safari" then return ""
+  set expectedURL to item 4 of fields
+  if expectedURL does not contain "youtube.com/watch" and expectedURL does not contain "youtube.com/shorts/" then return ""
+ on error
+  return ""
+ end try
+
+ tell application "Safari"
+  if not running then return ""
+  set candidates to {}
+  set sourcePosition to 0
+  repeat with w in windows
+   set wid to id of w
+   repeat with ti from 1 to count of tabs of w
+    try
+     set tabURL to URL of tab ti of w
+     if tabURL contains "youtube.com/watch" or tabURL contains "youtube.com/shorts/" then
+      set end of candidates to {wid, ti, tabURL}
+      if tabURL is expectedURL and sourcePosition is 0 then set sourcePosition to count of candidates
+     end if
+    end try
+   end repeat
+  end repeat
+  if sourcePosition is 0 then return ""
+  if (count of candidates) < 2 then return my open_youtube_home()
+  set {sourceWindow, sourceTab, sourceURL} to item sourcePosition of candidates
+  if URL of tab sourceTab of window id sourceWindow is not sourceURL then return ""
+  close tab sourceTab of window id sourceWindow
+  set {targetWindow, targetTab, targetURL} to my next_destination(candidates, sourcePosition)
+  if URL of tab targetTab of window id targetWindow is not targetURL then return ""
+  set current tab of window id targetWindow to tab targetTab of window id targetWindow
+  set index of window id targetWindow to 1
+  activate
+  do JavaScript "(() => {const v=document.querySelector('video');if(v){if(document.activeElement)document.activeElement.blur();v.setAttribute('tabindex','-1');v.focus();if(v.ended)v.currentTime=0;v.play().catch(()=>{});}})()" in tab targetTab of window id targetWindow
+  repeat 30 times
+   delay 0.1
+   if URL of current tab of front window is not targetURL or id of front window is not targetWindow then return "Selection changed; skipped fullscreen"
+   set playbackState to do JavaScript "(() => {const v=document.querySelector('video');return v&&!v.paused&&!v.ended?(document.fullscreenElement||v.webkitDisplayingFullscreen?'fullscreen':'playing'):'waiting';})()" in current tab of front window
+   if playbackState is "fullscreen" then return "Advanced to next YouTube video"
+   if playbackState is "playing" then
+    tell application "System Events"
+     if frontmost of application process "Safari" then keystroke "f"
+    end tell
+    return "Advanced to next YouTube video"
+   end if
+  end repeat
+  return "Selected next YouTube video; playback did not start"
+ end tell
+end try_cached_advance
 
 -- No queued video remains: open the home page without toggling fullscreen.
 on open_youtube_home()
