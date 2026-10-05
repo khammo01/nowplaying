@@ -8,6 +8,7 @@ error_sound="/System/Library/Sounds/Basso.aiff"
 
 case "$action" in
   next)     working="Switching to the next YouTube video" ;;
+  home)     working="Opening YouTube Home" ;;
   open)     working="Opening YouTube" ;;
   play)     working="Finding the last YouTube video" ;;
   surprise) working="Choosing a YouTube surprise" ;;
@@ -39,7 +40,7 @@ detail="${result#OK|}"
 
 # Refresh only after the browser has accepted the command; the former HA-side
 # 120/350 ms refreshes ran before slow tab changes had completed.
-if [[ "$action" != "open" ]]; then
+if [[ "$action" != "open" && "$action" != "home" ]]; then
   local_ip="$(/usr/sbin/ipconfig getifaddr en0 2>/dev/null || true)"
   for base in "http://${local_ip}:51520" "http://${local_ip}:51836" "http://192.168.1.26:51520"; do
     [[ "$base" == "http://:51520" || "$base" == "http://:51836" ]] && continue

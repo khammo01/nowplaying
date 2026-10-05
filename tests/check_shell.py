@@ -20,12 +20,23 @@ OMDB_API_KEY=test-only
 ''')
         mock = root / 'bin'
         mock.mkdir()
+        cache = root / 'cache'
+        cache.mkdir()
+        (cache / 'browser-inventory.json').write_text(json.dumps({
+            'tabs': [
+                {'is_youtube_video': True, 'title': 'Current - YouTube',
+                 'url': 'https://www.youtube.com/watch?v=active123'},
+                {'is_youtube_video': True, 'title': 'Queued video - YouTube',
+                 'url': 'https://www.youtube.com/watch?v=queued456'},
+            ]
+        }))
         commands = {
             'sleep': '#!/bin/bash\nkill -TERM "$PPID"\n',
-            'osascript': '#!/bin/bash\ncase "${1:-}" in\n*safari*) echo \'{"playing":' + str(playing).lower() + ',"title":"Test video","duration":60,"currentTime":2}\';;\n*) echo \'{"playing":false}\';;\nesac\n',
+            'osascript': '#!/bin/bash\ncase "${1:-}" in\n*safari*) echo \'{"playing":' + str(playing).lower() + ',"title":"Test video","duration":60,"currentTime":2,"video_id":"active123","url":"https://www.youtube.com/watch?v=active123"}\';;\n*) echo \'{"playing":false}\';;\nesac\n',
             'pmset': '#!/bin/bash\nexit 0\n',
             'ps': '#!/bin/bash\necho "2.5 coreaudiod"\n',
-            'scp': '#!/bin/bash\necho "Unexpected artwork upload" >&2\nexit 99\n',
+            'scp': '#!/bin/bash\nexit 0\n',
+            'ssh': '#!/bin/bash\nexit 0\n',
             'curl': '#!/usr/bin/python3\nimport json,os,sys\nwith open(os.environ["MOCK_REQUESTS"],"a") as f: f.write(json.dumps(sys.argv[1:])+"\\n")\nprint("200",end="")\n',
         }
         for name, content in commands.items():
@@ -46,4 +57,9 @@ OMDB_API_KEY=test-only
         webhook = next(r for r in requests if r[-1] == 'https://ha.invalid/webhook/test')
         payload = json.loads(webhook[webhook.index('-d') + 1])
         assert payload['youtube_playing'] == playing, payload
+        queue_ids = [item['video_id'] for item in payload['youtube_queue']]
+        assert 'queued456' in queue_ids, payload['youtube_queue']
+        assert ('active123' not in queue_ids) == playing, payload['youtube_queue']
+        queued = next(item for item in payload['youtube_queue'] if item['video_id'] == 'queued456')
+        assert queued['thumbnail_url'] == 'https://i.ytimg.com/vi/queued456/mqdefault.jpg', queued
 print('Passed idle/playing orchestration checks with isolated config and mocked network.')

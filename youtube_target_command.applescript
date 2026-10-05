@@ -22,9 +22,13 @@ on is_youtube_video(theURL)
 	return (theURL contains "youtube.com/watch") or (theURL contains "youtube.com/shorts/") or (theURL contains "youtu.be/")
 end is_youtube_video
 
+on inventory_path()
+	return (POSIX path of (path to home folder)) & "NowPlaying/cache/browser-inventory.json"
+end inventory_path
+
 on read_cached_target()
 	try
-		set cacheText to do shell script "/usr/bin/jq -r 'if (.active.browser // \"\") != \"\" then [.active.browser,.active.window_index,.active.tab_index,.active.url] | join(\"|\") else empty end' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
+		set cacheText to do shell script "/usr/bin/jq -r 'if (.active.browser // \"\") != \"\" then [.active.browser,.active.window_index,.active.tab_index,.active.url] | join(\"|\") else empty end' " & quoted form of my inventory_path()
 		set cacheParts to my split_pipe(cacheText)
 		if (count of cacheParts) ≥ 4 then return {item 1 of cacheParts, (item 2 of cacheParts as integer), (item 3 of cacheParts as integer), item 4 of cacheParts}
 	on error

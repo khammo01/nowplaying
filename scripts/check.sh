@@ -9,7 +9,9 @@ for name in safari_youtube_nowplaying VLC_nowplaying open_youtube_window next_yo
 done
 python3 "$ROOT/tests/check_playback.py"
 python3 "$ROOT/tests/check_shell.py"
+python3 "$ROOT/tests/check_lock.py"
 python3 "$ROOT/tests/check_next_youtube.py"
 python3 "$ROOT/tests/check_browser_cache.py"
 python3 "$ROOT/tests/check_self_update.py"
+python3 -m py_compile "$ROOT/scripts/install_btt_fast_paths.py"
 echo "All checks passed (no Home Assistant requests sent)."

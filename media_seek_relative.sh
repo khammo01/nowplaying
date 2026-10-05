@@ -61,4 +61,5 @@ if [[ "$source" == "music" || ( -z "$source" && "$music_result" == "music" ) ]];
   exit $?
 fi
 
-/usr/bin/osascript /Users/kuhammon/NowPlaying/youtube_target_command.applescript seek_relative "$delta"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
+/usr/bin/osascript "$SCRIPT_DIR/youtube_target_command.applescript" seek_relative "$delta"

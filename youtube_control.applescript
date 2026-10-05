@@ -1,9 +1,10 @@
 -- Fast YouTube window controls for NagBot/BTT.
--- Modes: open, play, surprise. Returns OK|detail or ERROR|detail.
+-- Modes: home, open, play, surprise. Returns OK|detail or ERROR|detail.
 
 on run argv
 	set actionName to "play"
 	if (count of argv) > 0 then set actionName to item 1 of argv
+	if actionName is "home" then return my open_youtube_home()
 	if actionName is "open" then return my open_youtube()
 	if actionName is "surprise" then return my surprise_me()
 	if actionName is "play_id" and (count of argv) > 1 then return my play_video_id(item 2 of argv)
@@ -36,11 +37,15 @@ on split_pipe(theText)
 	return pieces
 end split_pipe
 
+on inventory_path()
+	return (POSIX path of (path to home folder)) & "NowPlaying/cache/browser-inventory.json"
+end inventory_path
+
 on cached_target()
 	-- Prefer the atomic inventory maintained by the NowPlaying observer. It is
 	-- richer than the compatibility file and updated without blocking commands.
 	try
-		set cacheText to do shell script "/usr/bin/jq -r 'if (.active.browser // \"\") != \"\" then [.active.browser,.active.window_index,.active.tab_index,.active.url] | join(\"|\") else empty end' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
+		set cacheText to do shell script "/usr/bin/jq -r 'if (.active.browser // \"\") != \"\" then [.active.browser,.active.window_index,.active.tab_index,.active.url] | join(\"|\") else empty end' " & quoted form of my inventory_path()
 		set p to my split_pipe(cacheText)
 		if (count of p) ≥ 4 then return {item 1 of p, item 2 of p as integer, item 3 of p as integer, item 4 of p}
 	on error
@@ -188,7 +193,7 @@ end play_youtube
 on play_video_id(videoID)
 	if videoID is "" then return "ERROR|Missing YouTube video ID"
 	try
-		set query to "/usr/bin/jq -r --arg id " & quoted form of videoID & " '.tabs[] | select(.is_youtube_video==true and (.url | contains($id))) | [.browser,.window_index,.tab_index,.url] | join(\"|\")' /Users/kuhammon/NowPlaying/cache/browser-inventory.json | /usr/bin/head -n 1"
+		set query to "/usr/bin/jq -r --arg id " & quoted form of videoID & " '.tabs[] | select(.is_youtube_video==true and (.url | contains($id))) | [.browser,.window_index,.tab_index,.url] | join(\"|\")' " & quoted form of my inventory_path() & " | /usr/bin/head -n 1"
 		set cacheText to do shell script query
 		set p to my split_pipe(cacheText)
 		if (count of p) < 4 then return "ERROR|That queued video is no longer open"
@@ -255,6 +260,42 @@ on open_youtube()
 	end tell
 	return "OK|Opened YouTube"
 end open_youtube
+
+on open_youtube_home()
+	if application "Safari" is running then
+		tell application "Safari"
+			repeat with wi from 1 to count of windows
+				repeat with ti from 1 to count of tabs of window wi
+					if my is_youtube_home(URL of tab ti of window wi) then
+						set current tab of window wi to tab ti of window wi
+						set index of window wi to 1
+						activate
+						return "OK|Opened YouTube Home"
+					end if
+				end repeat
+			end repeat
+		end tell
+	end if
+	if application "Google Chrome" is running then
+		tell application "Google Chrome"
+			repeat with wi from 1 to count of windows
+				repeat with ti from 1 to count of tabs of window wi
+					if my is_youtube_home(URL of tab ti of window wi) then
+						set active tab index of window wi to ti
+						set index of window wi to 1
+						activate
+						return "OK|Opened YouTube Home"
+					end if
+				end repeat
+			end repeat
+		end tell
+	end if
+	tell application "Safari"
+		make new document with properties {URL:"https://www.youtube.com/"}
+		activate
+	end tell
+	return "OK|Opened YouTube Home"
+end open_youtube_home
 
 on surprise_me()
 	set targetWindow to 0

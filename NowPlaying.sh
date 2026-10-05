@@ -22,33 +22,6 @@ DEFAULT_VIDEO_ARTWORK="$NOWPLAYING_ROOT/default_video.jpg"
 MUSIC_ART_CACHE="$CACHE_ROOT/music_artwork"
 mkdir -p "$CACHE_ROOT" "$SSH_ROOT" "$MUSIC_ART_CACHE"
 LOCK_DIR="$CACHE_ROOT/nowplaying.lock"
-cleanup_lock() {
-    if [[ -f "$LOCK_DIR/pid" ]] && [[ "$(cat "$LOCK_DIR/pid" 2>/dev/null)" == "$$" ]]; then
-        rm -rf "$LOCK_DIR"
-    fi
-}
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    lock_pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
-    if [[ "$lock_pid" =~ ^[0-9]+$ ]] && kill -0 "$lock_pid" 2>/dev/null; then
-        echo "NowPlaying is already running as PID $lock_pid; exiting." >&2
-        exit 1
-    fi
-    rm -rf "$LOCK_DIR"
-    mkdir "$LOCK_DIR" || exit 1
-fi
-printf '%s\n' "$$" > "$LOCK_DIR/pid"
-trap 'cleanup_lock; echo "Received termination signal, exiting..."; exit 0' SIGTERM SIGINT
-sleep_pid=""; browser_pid=""; inventory_pid=""; immediate_poll_requested="false"
-request_immediate_poll() {
-    # BetterTouchTool calls this signal after a media command. Interrupt either
-    # the adaptive sleep or a browser probe that has stopped responding, then
-    # skip the next sleep so fresh metadata reaches Home Assistant immediately.
-    immediate_poll_requested="true"
-    [[ -n "${sleep_pid:-}" ]] && kill "$sleep_pid" 2>/dev/null || true
-    [[ -n "${browser_pid:-}" ]] && kill "$browser_pid" 2>/dev/null || true
-}
-trap request_immediate_poll SIGUSR1
-trap cleanup_lock EXIT
 # ============================================================
 # Home Assistant / Network
 # ============================================================
@@ -72,6 +45,72 @@ PAYLOAD_SCHEMA_VERSION=2
 for dependency in jq python3 curl osascript perl git; do
     command -v "$dependency" >/dev/null || { echo "Missing dependency: $dependency" >&2; exit 1; }
 done
+
+# The lock directory is atomic; lock.json makes the owner and start context
+# inspectable while retaining read support for the legacy plain-text PID file.
+LOCK_FILE="$LOCK_DIR/lock.json"
+read_lock_pid() {
+    if [[ -r "$LOCK_FILE" ]]; then
+        python3 - "$LOCK_FILE" <<'PY' 2>/dev/null || true
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    pid = json.load(handle).get("pid", "")
+if isinstance(pid, int) and pid > 0:
+    print(pid)
+PY
+    elif [[ -r "$LOCK_DIR/pid" ]]; then
+        cat "$LOCK_DIR/pid" 2>/dev/null || true
+    fi
+}
+cleanup_lock() {
+    local owner_pid
+    owner_pid=$(read_lock_pid)
+    if [[ "$owner_pid" == "$$" ]]; then
+        rm -rf "$LOCK_DIR"
+    fi
+}
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    lock_pid=$(read_lock_pid)
+    if [[ "$lock_pid" =~ ^[0-9]+$ ]] && kill -0 "$lock_pid" 2>/dev/null; then
+        echo "NowPlaying is already running as PID $lock_pid; exiting." >&2
+        exit 1
+    fi
+    rm -rf "$LOCK_DIR"
+    mkdir "$LOCK_DIR" || exit 1
+fi
+python3 - "$LOCK_FILE" "$$" "$NOWPLAYING_ROOT/NowPlaying.sh" "$(hostname -s)" <<'PY'
+import datetime
+import json
+import os
+import sys
+
+path, pid, script, hostname = sys.argv[1:]
+payload = {
+    "pid": int(pid),
+    "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    "script": script,
+    "hostname": hostname,
+}
+temporary = path + ".tmp"
+with open(temporary, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, separators=(",", ":"))
+    handle.write("\n")
+os.replace(temporary, path)
+PY
+trap 'cleanup_lock; echo "Received termination signal, exiting..."; exit 0' SIGTERM SIGINT
+sleep_pid=""; browser_pid=""; inventory_pid=""; immediate_poll_requested="false"
+request_immediate_poll() {
+    # BetterTouchTool calls this signal after a media command. Interrupt either
+    # the adaptive sleep or a browser probe that has stopped responding, then
+    # skip the next sleep so fresh metadata reaches Home Assistant immediately.
+    immediate_poll_requested="true"
+    [[ -n "${sleep_pid:-}" ]] && kill "$sleep_pid" 2>/dev/null || true
+    [[ -n "${browser_pid:-}" ]] && kill "$browser_pid" 2>/dev/null || true
+}
+trap request_immediate_poll SIGUSR1
+trap cleanup_lock EXIT
 # Timing & Thresholds
 # ============================================================
 
@@ -941,14 +980,15 @@ emit_home_assistant() {
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
     local youtube_queue='[]'
     if [[ -s "$CACHE_ROOT/browser-inventory.json" ]]; then
-        youtube_queue=$(jq -c '
+        youtube_queue=$(jq -c --arg active_video_id "$video_id" '
             [.tabs[]
              | select(.is_youtube_video == true)
              | {
                  title: ((.title // "YouTube") | sub(" - YouTube$"; "") | .[0:72]),
                  video_id: (try (.url | capture("(?:[?&]v=|/shorts/|youtu\\.be/)(?<id>[^?&#/]+)").id) catch "")
                }
-             | select(.video_id != "")]
+             | select(.video_id != "" and .video_id != $active_video_id)
+             | .thumbnail_url = ("https://i.ytimg.com/vi/" + .video_id + "/mqdefault.jpg")]
             | unique_by(.video_id)
             | .[:6]
         ' "$CACHE_ROOT/browser-inventory.json" 2>/dev/null || printf '[]')

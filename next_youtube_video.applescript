@@ -84,11 +84,12 @@ end tell
 -- then advance. The full probe below remains as recovery for a stale cache.
 on try_cached_advance()
  try
+	set inventoryPath to (POSIX path of (path to home folder)) & "NowPlaying/cache/browser-inventory.json"
   -- Reject an old inventory. URL validation protects identity, while this age
   -- bound prevents a newly opened queue from being omitted for too long.
-  set expectedURL to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 120) | select(.active.browser==\"Safari\") | .active.url // empty' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
+  set expectedURL to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 120) | select(.active.browser==\"Safari\") | .active.url // empty' " & quoted form of inventoryPath
   if expectedURL does not contain "youtube.com/watch" and expectedURL does not contain "youtube.com/shorts/" then return ""
-  set queueText to do shell script "/usr/bin/jq -r '.tabs[] | select(.browser==\"Safari\" and .is_youtube_video==true) | [.window_id,.tab_index,.url] | @tsv' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
+  set queueText to do shell script "/usr/bin/jq -r '.tabs[] | select(.browser==\"Safari\" and .is_youtube_video==true) | [.window_id,.tab_index,.url] | @tsv' " & quoted form of inventoryPath
   if queueText is "" then return ""
  on error
   return ""

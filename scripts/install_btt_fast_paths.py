@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 import socket
 import subprocess
 import urllib.request
 
 
-ROOT = "/Users/kuhammon/NowPlaying"
+ROOT = str(Path(__file__).resolve().parents[1])
 READ_SOURCE = (
     "source=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
     "to get_string_variable \"media_source\"' 2>/dev/null)\n"
@@ -20,13 +21,26 @@ COMMANDS = {
     "playpause_toggle": READ_SOURCE + f'exec {ROOT}/media_command.sh playpause "$source"',
     "mac_studio_next_song": READ_SOURCE + f'exec {ROOT}/media_command.sh next "$source"',
     "mac_mini_previous_song": READ_SOURCE + f'exec {ROOT}/media_command.sh previous "$source"',
+    "mac_studio_open_youtube": f'exec {ROOT}/youtube_action_with_feedback.sh open',
+    "mac_youtube_play": f'exec {ROOT}/youtube_action_with_feedback.sh play',
+    "mac_youtube_surprise_me": f'exec {ROOT}/youtube_action_with_feedback.sh surprise',
 }
 
 NEW_TRIGGERS = {
+    "mac_youtube_home": f'exec {ROOT}/youtube_action_with_feedback.sh home',
+    "media_controller_open_teams": "exec /usr/bin/open -a 'Microsoft Teams'",
     "mac_youtube_play_cached": (
         "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
         f'exec /usr/bin/osascript {ROOT}/youtube_control.applescript play_id "$video_id"'
+    ),
+    "media_controller_set_input_volume": (
+        "target=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"meeting_input_volume\"' 2>/dev/null)\n"
+        "case \"$target\" in ''|*[!0-9]*) exit 2;; esac\n"
+        "(( target < 0 )) && target=0\n"
+        "(( target > 100 )) && target=100\n"
+        "exec /usr/bin/osascript -e \"set volume input volume $target\""
     ),
 }
 

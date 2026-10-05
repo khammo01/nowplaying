@@ -7,12 +7,24 @@ media_source="${2:-}"
 value="${3:-}"
 
 signal_refresh() {
-  local pid_file="$root/cache/nowplaying.lock/pid"
-  if [[ -r "$pid_file" ]]; then
-    local collector_pid
-    collector_pid="$(<"$pid_file")"
-    [[ "$collector_pid" =~ ^[0-9]+$ ]] && kill -USR1 "$collector_pid" 2>/dev/null || true
+  local lock_dir="$root/cache/nowplaying.lock"
+  local lock_file="$lock_dir/lock.json"
+  local collector_pid=""
+  if [[ -r "$lock_file" ]]; then
+    collector_pid="$(/usr/bin/python3 - "$lock_file" <<'PY' 2>/dev/null || true
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    pid = json.load(handle).get("pid", "")
+if isinstance(pid, int) and pid > 0:
+    print(pid)
+PY
+)"
+  elif [[ -r "$lock_dir/pid" ]]; then
+    collector_pid="$(<"$lock_dir/pid")"
   fi
+  [[ "$collector_pid" =~ ^[0-9]+$ ]] && kill -USR1 "$collector_pid" 2>/dev/null || true
 }
 
 if [[ -z "$media_source" || "$media_source" == "unknown" ]]; then
