@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import urllib.request
 
@@ -48,10 +49,23 @@ end run
 def load_local_triggers() -> list[dict]:
     """Read the BTT instance on this Mac, never another Mac's trigger UUIDs."""
     configured = os.environ.get("BTT_URL", "").rstrip("/")
+    local_ip = ""
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("1.1.1.1", 80))
+        local_ip = probe.getsockname()[0]
+        probe.close()
+    except OSError:
+        pass
     candidates = ([configured] if configured else []) + [
         "http://127.0.0.1:51520/get_triggers",
         "http://127.0.0.1:51836/get_triggers",
     ]
+    if local_ip:
+        candidates += [
+            f"http://{local_ip}:51520/get_triggers",
+            f"http://{local_ip}:51836/get_triggers",
+        ]
     errors = []
     for url in candidates:
         if not url:
