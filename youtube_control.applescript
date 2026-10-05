@@ -320,7 +320,7 @@ on surprise_me()
 			set current tab of w to t
 			set index of w to 1
 			activate
-			set recommendationJS to "(() => {const selectors=['ytd-rich-item-renderer:not([is-ad]) a#thumbnail[href*=\"/watch\"]','ytd-rich-item-renderer a#thumbnail[href*=\"/watch\"]','a#thumbnail[href*=\"/watch\"]'];for(const s of selectors){const a=[...document.querySelectorAll(s)].find(x=>x.href&&!x.closest('ytd-ad-slot-renderer'));if(a)return a.href;}return '';})()"
+			set recommendationJS to "(() => {const selectors=['a.ytLockupViewModelContentImage[href*=\"/watch\"]','ytd-rich-item-renderer:not([is-ad]) a[href*=\"/watch\"]','ytd-rich-item-renderer a[href*=\"/watch\"]','a[href*=\"/watch\"]'];for(const s of selectors){const a=[...document.querySelectorAll(s)].find(x=>x.href&&!x.closest('ytd-ad-slot-renderer,ytm-promoted-sparkles-web-renderer')&&!x.href.includes('/watch?list='));if(a)return a.href;}return '';})()"
 			repeat 24 times
 				try
 					set destination to do JavaScript recommendationJS in t

@@ -12,6 +12,7 @@ import urllib.request
 
 
 ROOT = str(Path(__file__).resolve().parents[1])
+SHELL_ACTION_CONFIG = "/bin/zsh:::-c:::-:::"
 READ_SOURCE = (
     "source=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
     "to get_string_variable \"media_source\"' 2>/dev/null)\n"
@@ -106,6 +107,7 @@ def main() -> int:
                     "BTTPredefinedActionType": 206,
                     "BTTPredefinedActionName": "Execute Shell Script  or  Task",
                     "BTTShellTaskActionScript": command,
+                    "BTTShellTaskActionConfig": SHELL_ACTION_CONFIG,
                 },
             )
             print(f"Updated {name}")
@@ -120,6 +122,7 @@ def main() -> int:
                     "BTTPredefinedActionType": 206,
                     "BTTPredefinedActionName": "Execute Shell Script  or  Task",
                     "BTTShellTaskActionScript": command,
+                    "BTTShellTaskActionConfig": SHELL_ACTION_CONFIG,
                 }
             ],
         }
@@ -150,6 +153,7 @@ end run
                 "BTTPredefinedActionType": 206,
                 "BTTPredefinedActionName": "Execute Shell Script  or  Task",
                 "BTTShellTaskActionScript": command,
+                "BTTShellTaskActionConfig": SHELL_ACTION_CONFIG,
             },
         )
         print(f"Updated {name}")
