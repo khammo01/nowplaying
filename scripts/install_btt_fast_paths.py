@@ -25,6 +25,11 @@ COMMANDS = {
     "mac_studio_open_youtube": f'exec {ROOT}/youtube_action_with_feedback.sh open',
     "mac_youtube_play": f'exec {ROOT}/youtube_action_with_feedback.sh play',
     "mac_youtube_surprise_me": f'exec {ROOT}/youtube_action_with_feedback.sh surprise',
+    "mac_mini_play_apple_music_playlist": (
+        "station=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"playlist_id\"' 2>/dev/null)\n"
+        f'exec {ROOT}/play_music_station.sh "$station"'
+    ),
 }
 
 NEW_TRIGGERS = {
