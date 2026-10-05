@@ -24,6 +24,13 @@ end is_youtube_video
 
 on read_cached_target()
 	try
+		set cacheText to do shell script "/usr/bin/jq -r 'if (.active.browser // \"\") != \"\" then [.active.browser,.active.window_index,.active.tab_index,.active.url] | join(\"|\") else empty end' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
+		set cacheParts to my split_pipe(cacheText)
+		if (count of cacheParts) ≥ 4 then return {item 1 of cacheParts, (item 2 of cacheParts as integer), (item 3 of cacheParts as integer), item 4 of cacheParts}
+	on error
+	end try
+	-- Legacy cache remains a startup fallback while the observer warms up.
+	try
 		set cacheText to do shell script "cat /tmp/nagmenu_nowplaying_tab_cache"
 		set cacheParts to my split_pipe(cacheText)
 		if (count of cacheParts) < 4 then return {}

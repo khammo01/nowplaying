@@ -36,6 +36,15 @@ on split_pipe(theText)
 end split_pipe
 
 on cached_target()
+	-- Prefer the atomic inventory maintained by the NowPlaying observer. It is
+	-- richer than the compatibility file and updated without blocking commands.
+	try
+		set cacheText to do shell script "/usr/bin/jq -r 'if (.active.browser // \"\") != \"\" then [.active.browser,.active.window_index,.active.tab_index,.active.url] | join(\"|\") else empty end' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
+		set p to my split_pipe(cacheText)
+		if (count of p) ≥ 4 then return {item 1 of p, item 2 of p as integer, item 3 of p as integer}
+	on error
+	end try
+	-- Compatibility during startup and on older installations.
 	try
 		set cacheText to do shell script "cat /tmp/nagmenu_nowplaying_tab_cache"
 		set p to my split_pipe(cacheText)

@@ -47,4 +47,8 @@ if [[ "$action" != "open" ]]; then
   done
 fi
 
+# The command has just changed selection/playback. Refresh the cheap inventory
+# out of band; metadata refresh remains independently signal-driven above.
+"$root/refresh_browser_cache.sh" >/dev/null 2>&1 &
+
 exit 0

@@ -38,7 +38,7 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
 fi
 printf '%s\n' "$$" > "$LOCK_DIR/pid"
 trap 'cleanup_lock; echo "Received termination signal, exiting..."; exit 0' SIGTERM SIGINT
-sleep_pid=""; browser_pid=""; immediate_poll_requested="false"
+sleep_pid=""; browser_pid=""; inventory_pid=""; immediate_poll_requested="false"
 request_immediate_poll() {
     # BetterTouchTool calls this signal after a media command. Interrupt either
     # the adaptive sleep or a browser probe that has stopped responding, then
@@ -78,7 +78,8 @@ done
 PAUSED_WINDOW_SEC=8; ACTIVE_CHECK_INTERVAL=3; PAUSED_CHECK_INTERVAL=3.5; IDLE_RECENT_CHECK_INTERVAL=5
 IDLE_WARM_CHECK_INTERVAL=7; IDLE_LONG_CHECK_INTERVAL=10; IDLE_WARM_AFTER_SEC=60; IDLE_LONG_AFTER_SEC=300
 CACHE_CLEANUP_INTERVAL=3600; next_check_interval="$ACTIVE_CHECK_INTERVAL"; last_polled_time="--:--:--.---"
-last_cache_cleanup=0
+last_cache_cleanup=0; last_browser_inventory=0
+BROWSER_INVENTORY_ACTIVE_INTERVAL=8; BROWSER_INVENTORY_IDLE_INTERVAL=30
 
 
 # ============================================================
@@ -533,6 +534,11 @@ parse_music_json() {
     if [[ "$music_playing" == "true" ]]; then
         track="$parsed_track"; artist="$parsed_artist"; album="$parsed_album"; genre="$parsed_genre"
         year="$parsed_year"; duration_sec="$parsed_duration"; currentTime="$parsed_position"
+        # Browser/VLC descriptive metadata must never leak into the next Music
+        # track. Music-specific notes or lyrics can populate this deliberately
+        # later; until then the controller renders its track-details fallback.
+        summary=""; description=""; view_count=""; published_date=""; subscriber_count=""
+        url=""; video_id=""; playlist_name=""
         normalize_ints duration_sec currentTime
     fi
 }
@@ -1239,6 +1245,23 @@ while true; do
     fi
     ha_end_ms=$(timestamp_ms)
     ha_network_ms=$(( ha_end_ms - ha_start_ms ))
+    # Keep a global URL/title inventory warm without adding browser enumeration
+    # to command latency or the metadata critical path. Only this loop launches
+    # the writer; the writer itself uses a lock and atomic rename.
+    if [[ -n "$inventory_pid" ]] && ! kill -0 "$inventory_pid" 2>/dev/null; then
+        wait "$inventory_pid" 2>/dev/null || true
+        inventory_pid=""
+    fi
+    if [[ "$media_status" == "Idle" ]]; then
+        browser_inventory_interval="$BROWSER_INVENTORY_IDLE_INTERVAL"
+    else
+        browser_inventory_interval="$BROWSER_INVENTORY_ACTIVE_INTERVAL"
+    fi
+    if [[ -z "$inventory_pid" ]] && (( loop_now_epoch - last_browser_inventory >= browser_inventory_interval )); then
+        "$NOWPLAYING_ROOT/refresh_browser_cache.sh" >/dev/null 2>&1 &
+        inventory_pid=$!
+        last_browser_inventory="$loop_now_epoch"
+    fi
     # ========================================================
     # Cache Cleanup
     # ========================================================

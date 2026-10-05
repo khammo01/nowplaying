@@ -28,6 +28,14 @@ Home Assistant receives one versioned JSON document per meaningful media update.
 
 The runner executes readable `.applescript` source directly. Edit and commit those files, not compiled `.scpt` files. No build is needed to run. Old compiled files on an existing Mac are ignored compatibility artifacts for an already-running older loop.
 
+Browser commands use `cache/browser-inventory.json`, a lightweight inventory
+that `NowPlaying.sh` refreshes in the background. It stores media-tab URLs,
+titles, stable window IDs, tab indexes, and the last confirmed playback target.
+Commands validate the cached URL before acting and fall back to a bounded live
+scan if a tab moved or closed. The cache is replaced atomically, refreshes about
+every 8 seconds during active media and every 30 seconds while idle, and is also
+refreshed asynchronously after a controller command changes browser state.
+
 ## Sync changes
 
 For pushing, authenticate Git on each Mac separately (for example, install GitHub CLI and run `gh auth login`). Browser sign-in alone does not authenticate command-line Git.

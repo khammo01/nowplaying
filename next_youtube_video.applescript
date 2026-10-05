@@ -84,14 +84,12 @@ end tell
 -- then advance. The full probe below remains as recovery for a stale cache.
 on try_cached_advance()
  try
-  set cacheText to do shell script "cat /tmp/nagmenu_nowplaying_tab_cache"
-  set oldDelimiters to AppleScript's text item delimiters
-  set AppleScript's text item delimiters to "|"
-  set fields to text items of cacheText
-  set AppleScript's text item delimiters to oldDelimiters
-  if (count of fields) < 4 or item 1 of fields is not "Safari" then return ""
-  set expectedURL to item 4 of fields
+  -- Reject an old inventory. URL validation protects identity, while this age
+  -- bound prevents a newly opened queue from being omitted for too long.
+  set expectedURL to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 120) | select(.active.browser==\"Safari\") | .active.url // empty' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
   if expectedURL does not contain "youtube.com/watch" and expectedURL does not contain "youtube.com/shorts/" then return ""
+  set queueText to do shell script "/usr/bin/jq -r '.tabs[] | select(.browser==\"Safari\" and .is_youtube_video==true) | [.window_id,.tab_index,.url] | @tsv' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
+  if queueText is "" then return ""
  on error
   return ""
  end try
@@ -100,17 +98,26 @@ on try_cached_advance()
   if not running then return ""
   set candidates to {}
   set sourcePosition to 0
-  repeat with w in windows
-   set wid to id of w
-   repeat with ti from 1 to count of tabs of w
+  set oldDelimiters to AppleScript's text item delimiters
+  set AppleScript's text item delimiters to linefeed
+  set queueLines to text items of queueText
+  set AppleScript's text item delimiters to oldDelimiters
+  repeat with queueLine in queueLines
+   set AppleScript's text item delimiters to tab
+   set queueFields to text items of (queueLine as text)
+   set AppleScript's text item delimiters to oldDelimiters
+   if (count of queueFields) ≥ 3 then
     try
-     set tabURL to URL of tab ti of w
-     if tabURL contains "youtube.com/watch" or tabURL contains "youtube.com/shorts/" then
+     set wid to item 1 of queueFields as integer
+     set ti to item 2 of queueFields as integer
+     set tabURL to item 3 of queueFields
+     -- Validate every cached identity before it can become a source or target.
+     if URL of tab ti of window id wid is tabURL then
       set end of candidates to {wid, ti, tabURL}
       if tabURL is expectedURL and sourcePosition is 0 then set sourcePosition to count of candidates
      end if
     end try
-   end repeat
+   end if
   end repeat
   if sourcePosition is 0 then return ""
   if (count of candidates) < 2 then return my open_youtube_home()
