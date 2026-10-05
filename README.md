@@ -23,6 +23,7 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 - `default_music.jpg`: fallback artwork used by the shell.
 - `scripts/check.sh`: syntax, AppleScript compilation, browser playback regression checks, and isolated shell orchestration tests with mocked network calls.
 - `scripts/update.sh`: refuses uncommitted changes, pulls using `--ff-only`, and validates the result. It never auto-merges or discards local changes.
+- `scripts/self_update.sh`: checks the tracked upstream branch, validates an update in a temporary checkout on the current Mac, then fast-forwards. `NowPlaying.sh` runs it at startup and hourly while playback is idle, and restarts itself after a successful update. Local changes, divergent history, failed validation, and network failures leave the running version untouched. Set `NOWPLAYING_AUTO_UPDATE_ENABLED=false` locally to disable it or change `NOWPLAYING_AUTO_UPDATE_INTERVAL` from the 3600-second default.
 
 Home Assistant receives one versioned JSON document per meaningful media update. Payloads include a schema version, event ID, source-device name, and send timestamp so Home Assistant can keep one canonical metadata sensor without reconstructing media state from many helpers. Webhook delivery uses bounded connection/response timeouts and limited retries; a slow Home Assistant instance cannot stall the polling loop indefinitely.
 

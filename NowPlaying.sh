@@ -69,7 +69,7 @@ SSH_KEY="${SSH_KEY:-$SSH_ROOT/id_ecdsa_ha}"
 export OMDB_API_KEY="${OMDB_API_KEY:-}"
 SOURCE_DEVICE="${SOURCE_DEVICE:-$(scutil --get ComputerName 2>/dev/null || hostname -s)}"
 PAYLOAD_SCHEMA_VERSION=2
-for dependency in jq python3 curl osascript perl; do
+for dependency in jq python3 curl osascript perl git; do
     command -v "$dependency" >/dev/null || { echo "Missing dependency: $dependency" >&2; exit 1; }
 done
 # Timing & Thresholds
@@ -80,6 +80,9 @@ IDLE_WARM_CHECK_INTERVAL=7; IDLE_LONG_CHECK_INTERVAL=10; IDLE_WARM_AFTER_SEC=60;
 CACHE_CLEANUP_INTERVAL=3600; next_check_interval="$ACTIVE_CHECK_INTERVAL"; last_polled_time="--:--:--.---"
 last_cache_cleanup=0; last_browser_inventory=0
 BROWSER_INVENTORY_ACTIVE_INTERVAL=8; BROWSER_INVENTORY_IDLE_INTERVAL=30
+NOWPLAYING_AUTO_UPDATE_ENABLED="${NOWPLAYING_AUTO_UPDATE_ENABLED:-true}"
+NOWPLAYING_AUTO_UPDATE_INTERVAL="${NOWPLAYING_AUTO_UPDATE_INTERVAL:-3600}"
+last_auto_update_check=0
 
 
 # ============================================================
@@ -217,6 +220,25 @@ draw_startup_screen() {
 
 cleanup_cache() {
     find "$CACHE_ROOT" -type f -mtime +1 -delete 2>/dev/null
+}
+
+check_for_self_update() {
+    local now rc
+    [[ "$NOWPLAYING_AUTO_UPDATE_ENABLED" == "true" ]] || return 0
+    [[ -x "$NOWPLAYING_ROOT/scripts/self_update.sh" ]] || return 0
+    [[ "$NOWPLAYING_AUTO_UPDATE_INTERVAL" =~ ^[0-9]+$ ]] || NOWPLAYING_AUTO_UPDATE_INTERVAL=3600
+    now=$(epoch_now)
+    if (( last_auto_update_check > 0 && now - last_auto_update_check < NOWPLAYING_AUTO_UPDATE_INTERVAL )); then
+        return 0
+    fi
+    last_auto_update_check="$now"
+    "$NOWPLAYING_ROOT/scripts/self_update.sh"
+    rc=$?
+    if (( rc == 10 )); then
+        cleanup_lock
+        exec "$NOWPLAYING_ROOT/NowPlaying.sh"
+    fi
+    return 0
 }
 
 
@@ -1140,6 +1162,7 @@ emit_cli() {
 # Initialization
 # ============================================================
 
+check_for_self_update
 load_persistent_state
 draw_startup_screen
 
@@ -1305,6 +1328,11 @@ while true; do
     if (( loop_now_epoch - last_cache_cleanup > CACHE_CLEANUP_INTERVAL )); then
         cleanup_cache
         last_cache_cleanup="$loop_now_epoch"
+    fi
+    # Avoid restarting while media is active. Startup checks still happen before
+    # the first poll, and periodic checks wait for the next idle cycle.
+    if [[ "$media_status" == "Idle" ]]; then
+        check_for_self_update
     fi
     # ========================================================
     # Finish Profiling This Loop
