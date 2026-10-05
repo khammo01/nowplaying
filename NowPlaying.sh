@@ -101,7 +101,7 @@ youtube_video_count=0; high_score=0; last_video_id=""; last_video_timestamp=0; l
 last_thumbnail_url=""; last_generic_artwork_key=""; last_known_track=""; last_known_artist=""; last_known_description=""
 last_known_youtube_active="false"; last_music_artwork_hash=""; last_music_artwork_key=""; last_ha_media_active_state=""
 last_ha_update_time_utc=""; last_ha_update_time_local="--:--:--.---"; last_emitted_state=""; last_idle_bucket=""
-current_idle_bucket=""
+current_idle_bucket=""; last_emitted_queue_signature=""; last_successful_ha_emit_epoch=0; force_emit_this_poll="false"
 artwork_version=""
 
 
@@ -750,6 +750,24 @@ idle_bucket() {
 }
 should_emit() {
     idle_bucket
+    local queue_signature=""
+    if [[ -s "$CACHE_ROOT/browser-inventory.json" ]]; then
+        queue_signature=$(jq -c '[.tabs[] | select(.is_youtube_video == true) | {title, url}]' \
+            "$CACHE_ROOT/browser-inventory.json" 2>/dev/null || true)
+    fi
+    if [[ "$force_emit_this_poll" == "true" ]]; then
+        last_emitted_queue_signature="$queue_signature"
+        return 0
+    fi
+    if [[ "$queue_signature" != "$last_emitted_queue_signature" ]]; then
+        last_emitted_queue_signature="$queue_signature"
+        return 0
+    fi
+    # Retry/reconcile periodically so a Home Assistant restart or brief network
+    # outage cannot leave otherwise-stable idle metadata stale forever.
+    if (( loop_now_epoch - last_successful_ha_emit_epoch >= 60 )); then
+        return 0
+    fi
     if [[ "$media_status" == "Music" ||
           "$media_status" == "YouTube" ]]; then
         last_emitted_state="$media_status"; last_idle_bucket=""; return 0
@@ -899,6 +917,20 @@ emit_home_assistant() {
     normalize_bools youtube_playing music_playing
     sanitize_vars track artist album genre year summary description view_count published_date subscriber_count media_status media_source currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
+    local youtube_queue='[]'
+    if [[ -s "$CACHE_ROOT/browser-inventory.json" ]]; then
+        youtube_queue=$(jq -c '
+            [.tabs[]
+             | select(.is_youtube_video == true)
+             | {
+                 title: ((.title // "YouTube") | sub(" - YouTube$"; "") | .[0:72]),
+                 video_id: (try (.url | capture("(?:[?&]v=|/shorts/|youtu\\.be/)(?<id>[^?&#/]+)").id) catch "")
+               }
+             | select(.video_id != "")]
+            | unique_by(.video_id)
+            | .[:6]
+        ' "$CACHE_ROOT/browser-inventory.json" 2>/dev/null || printf '[]')
+    fi
     local sent_at event_id
     sent_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
     event_id="${SOURCE_DEVICE}-$(timestamp_ms)"
@@ -911,6 +943,7 @@ emit_home_assistant() {
             --argjson schema_version "$PAYLOAD_SCHEMA_VERSION" \
             --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson youtube_playing "$youtube_playing" \
             --argjson volume_percent "$volume_percent" \
+            --argjson youtube_queue "$youtube_queue" \
             --argjson music_app_playing "$music_playing" --argjson total_videos_watched "$youtube_video_count" --argjson high_score "$high_score" \
             --argjson video_duration "$duration_sec" '
             {
@@ -928,6 +961,8 @@ emit_home_assistant() {
                 view_count: $view_count,
                 published_date: $published_date,
                 subscriber_count: $subscriber_count,
+                youtube_queue: $youtube_queue,
+                youtube_queue_json: ({items: $youtube_queue} | tojson),
                 media_status: $media_status,
                 media_source: $media_source,
                 idle_duration: $idle_duration,
@@ -961,6 +996,7 @@ emit_home_assistant() {
     )
     if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
         debugecho "DEBUG HA Result: Success"
+        last_successful_ha_emit_epoch="$loop_now_epoch"
     else
         debugecho "DEBUG HA Result: Error - $http_code"
     fi
@@ -1113,6 +1149,7 @@ draw_startup_screen
 # ============================================================
 
 while true; do
+    force_emit_this_poll="$immediate_poll_requested"
     immediate_poll_requested="false"
     loop_start_ms=$(timestamp_ms)
     loop_now_epoch=$(epoch_now)

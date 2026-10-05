@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP_CHECK="$(mktemp -d)"
 trap 'rm -rf "$TMP_CHECK"' EXIT
-bash -n "$ROOT/NowPlaying.sh" "$ROOT/config.example.sh" "$ROOT/scripts/check.sh" "$ROOT/scripts/update.sh"
+bash -n "$ROOT/NowPlaying.sh" "$ROOT/config.example.sh" "$ROOT/scripts/check.sh" "$ROOT/scripts/update.sh" "$ROOT/media_command.sh"
 for name in safari_youtube_nowplaying VLC_nowplaying open_youtube_window next_youtube_video browser_inventory youtube_control youtube_target_command; do
     osacompile -o "$TMP_CHECK/$name.scpt" "$ROOT/$name.applescript"
 done

@@ -3,6 +3,7 @@
 !/.gitignore
 !/NowPlaying.sh
 !/media_seek_relative.sh
+!/media_command.sh
 !/youtube_action_with_feedback.sh
 !/refresh_browser_cache.sh
 !/update_browser_cache.py

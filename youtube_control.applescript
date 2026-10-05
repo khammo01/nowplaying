@@ -6,6 +6,7 @@ on run argv
 	if (count of argv) > 0 then set actionName to item 1 of argv
 	if actionName is "open" then return my open_youtube()
 	if actionName is "surprise" then return my surprise_me()
+	if actionName is "play_id" and (count of argv) > 1 then return my play_video_id(item 2 of argv)
 	return my play_youtube()
 end run
 
@@ -41,14 +42,14 @@ on cached_target()
 	try
 		set cacheText to do shell script "/usr/bin/jq -r 'if (.active.browser // \"\") != \"\" then [.active.browser,.active.window_index,.active.tab_index,.active.url] | join(\"|\") else empty end' /Users/kuhammon/NowPlaying/cache/browser-inventory.json"
 		set p to my split_pipe(cacheText)
-		if (count of p) ≥ 4 then return {item 1 of p, item 2 of p as integer, item 3 of p as integer}
+		if (count of p) ≥ 4 then return {item 1 of p, item 2 of p as integer, item 3 of p as integer, item 4 of p}
 	on error
 	end try
 	-- Compatibility during startup and on older installations.
 	try
 		set cacheText to do shell script "cat /tmp/nagmenu_nowplaying_tab_cache"
 		set p to my split_pipe(cacheText)
-		if (count of p) ≥ 3 then return {item 1 of p, item 2 of p as integer, item 3 of p as integer}
+		if (count of p) ≥ 4 then return {item 1 of p, item 2 of p as integer, item 3 of p as integer, item 4 of p}
 	on error
 	end try
 	return {}
@@ -60,13 +61,21 @@ on pause_music()
 	end try
 end pause_music
 
-on play_target(browserName, windowIndex, tabIndex)
+on play_target(browserName, windowIndex, tabIndex, expectedURL)
 	set playJS to "(() => {const v=[...document.querySelectorAll('video')].find(x=>x.readyState>=2)||document.querySelector('video');if(!v)return 'ERROR|Video is not ready';if(v.ended)v.currentTime=0;v.play().catch(()=>{});return 'OK|'+(document.title||'YouTube');})()"
 	try
 		if browserName is "Safari" then
 			tell application "Safari"
 				set w to window windowIndex
 				set t to tab tabIndex of w
+				if expectedURL is not "" and URL of t is not expectedURL then
+					repeat with candidateWindow in windows
+						repeat with candidateTab in tabs of candidateWindow
+							if URL of candidateTab is expectedURL then set {w, t} to {candidateWindow, candidateTab}
+						end repeat
+					end repeat
+				end if
+				if expectedURL is not "" and URL of t is not expectedURL then return "ERROR|The saved YouTube tab moved"
 				if not my is_youtube_video(URL of t) then return "ERROR|The saved YouTube tab is gone"
 				set current tab of w to t
 				set index of w to 1
@@ -78,6 +87,14 @@ on play_target(browserName, windowIndex, tabIndex)
 			tell application "Google Chrome"
 				set w to window windowIndex
 				set t to tab tabIndex of w
+				if expectedURL is not "" and URL of t is not expectedURL then
+					repeat with candidateWindow in windows
+						repeat with candidateTab in tabs of candidateWindow
+							if URL of candidateTab is expectedURL then set {w, t} to {candidateWindow, candidateTab}
+						end repeat
+					end repeat
+				end if
+				if expectedURL is not "" and URL of t is not expectedURL then return "ERROR|The saved YouTube tab moved"
 				if not my is_youtube_video(URL of t) then return "ERROR|The saved YouTube tab is gone"
 				set active tab index of w to tabIndex
 				set index of w to 1
@@ -95,8 +112,8 @@ end play_target
 on play_youtube()
 	-- The NowPlaying cache is the cheapest and most accurate last-played target.
 	set cached to my cached_target()
-	if (count of cached) is 3 then
-		set cachedResult to my play_target(item 1 of cached, item 2 of cached, item 3 of cached)
+	if (count of cached) is 4 then
+		set cachedResult to my play_target(item 1 of cached, item 2 of cached, item 3 of cached, item 4 of cached)
 		if cachedResult starts with "OK|" then return cachedResult
 	end if
 
@@ -163,10 +180,23 @@ on play_youtube()
 		end tell
 	end if
 
-	if bestRank > 1 then return my play_target(bestBrowser, bestWindow, bestTab)
-	if queueCount > 0 then return my play_target(queueBrowser, queueWindow, queueTab)
+	if bestRank > 1 then return my play_target(bestBrowser, bestWindow, bestTab, "")
+	if queueCount > 0 then return my play_target(queueBrowser, queueWindow, queueTab, "")
 	return "ERROR|No YouTube video tabs are open"
 end play_youtube
+
+on play_video_id(videoID)
+	if videoID is "" then return "ERROR|Missing YouTube video ID"
+	try
+		set query to "/usr/bin/jq -r --arg id " & quoted form of videoID & " '.tabs[] | select(.is_youtube_video==true and (.url | contains($id))) | [.browser,.window_index,.tab_index,.url] | join(\"|\")' /Users/kuhammon/NowPlaying/cache/browser-inventory.json | /usr/bin/head -n 1"
+		set cacheText to do shell script query
+		set p to my split_pipe(cacheText)
+		if (count of p) < 4 then return "ERROR|That queued video is no longer open"
+		return my play_target(item 1 of p, item 2 of p as integer, item 3 of p as integer, item 4 of p)
+	on error errorText
+		return "ERROR|" & errorText
+	end try
+end play_video_id
 
 on open_youtube()
 	set bestBrowser to ""
