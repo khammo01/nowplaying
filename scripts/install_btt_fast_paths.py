@@ -114,7 +114,7 @@ NEW_TRIGGERS = {
         "case \"$target\" in ''|*[!0-9]*) exit 2;; esac\n"
         "(( target < 0 )) && target=0\n"
         "(( target > 100 )) && target=100\n"
-        "exec /usr/bin/osascript -e \"set volume input volume $target\""
+        "exec /usr/bin/osascript -e \"set volume output volume $target\""
     ),
 }
 
