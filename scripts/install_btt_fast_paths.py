@@ -59,6 +59,12 @@ COMMANDS = {
         '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &\n'
         f'exec /usr/bin/osascript {ROOT}/youtube_target_command.applescript fullscreen'
     ),
+    "nowplaying_refresh": (
+        'root="$HOME/NowPlaying"\n'
+        'pid=$(/usr/bin/jq -r ".pid // empty" "$root/cache/nowplaying.lock/lock.json" 2>/dev/null)\n'
+        'if [[ ! "$pid" =~ ^[0-9]+$ ]]; then pid=$(cat "$root/cache/nowplaying.lock/pid" 2>/dev/null); fi\n'
+        'if [[ "$pid" =~ ^[0-9]+$ ]]; then kill -USR1 "$pid" 2>/dev/null; fi'
+    ),
 }
 
 NEW_TRIGGERS = {
