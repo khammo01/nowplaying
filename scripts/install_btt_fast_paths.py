@@ -97,7 +97,12 @@ NEW_TRIGGERS = {
     "music_shuffle_toggle": detached(
         f"/usr/bin/osascript {ROOT}/music_shuffle_toggle.applescript"
     ),
-    "media_controller_open_teams": detached("/usr/bin/open -a 'Microsoft Teams'"),
+    "media_controller_open_teams": detached(
+        "/usr/bin/osascript -e 'tell application \"Microsoft Teams\" to activate'"
+    ),
+    "media_controller_toggle_teams_mute": detached(
+        f"/usr/bin/osascript {ROOT}/teams_toggle_mute.applescript"
+    ),
     "mac_youtube_play_cached": (
         "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
