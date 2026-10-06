@@ -94,6 +94,9 @@ COMMANDS = {
 
 NEW_TRIGGERS = {
     "mac_youtube_home": youtube_detached("home"),
+    "music_shuffle_toggle": detached(
+        f"/usr/bin/osascript {ROOT}/music_shuffle_toggle.applescript"
+    ),
     "media_controller_open_teams": detached("/usr/bin/open -a 'Microsoft Teams'"),
     "mac_youtube_play_cached": (
         "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
@@ -200,6 +203,42 @@ end run
                 "BTTShellTaskActionConfig": SHELL_ACTION_CONFIG,
             },
         )
+        if name == "mac_mini_play_apple_music_playlist" and len(actions) > 1:
+            # The shell action returns immediately, so BTTLastTerminalCommandResult can
+            # still contain an unrelated prior action. The playlist_id variable is set
+            # by Home Assistant before this trigger is invoked and is deterministic.
+            hud = actions[1]
+            hud_config = json.loads(hud.get("BTTHUDActionConfiguration") or "{}")
+            hud_config["BTTActionHUDTitle"] = "Now Playing: {playlist_id}"
+            hud_config["BTTActionHUDAttributedTitle"] = ""
+            hud_config["BTTActionHUDDetail"] = ""
+            update_trigger(
+                hud["BTTUUID"],
+                {
+                    "BTTHUDActionConfiguration": json.dumps(
+                        hud_config, separators=(",", ":")
+                    ),
+                    "BTTAdditionalActionData": hud_config,
+                },
+            )
+            update_trigger(
+                trigger["BTTUUID"],
+                {"BTTTriggerConfig": {"BTTHUDText": "", "BTTShowHUD": 0}},
+            )
+            print("Updated playlist HUD")
+        if name == "mac_studio_skip_forward":
+            # Progress-slider seeks include their destination as a BTT variable.
+            # Showing that value avoids the old hard-coded "+10s" feedback.
+            update_trigger(
+                trigger["BTTUUID"],
+                {
+                    "BTTTriggerConfig": {
+                        "BTTHUDText": "Seeking… {seek_target_percent}%",
+                        "BTTShowHUD": 1,
+                    }
+                },
+            )
+            print("Updated seek HUD")
         print(f"Updated {name}")
     return 0
 
