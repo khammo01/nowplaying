@@ -58,5 +58,12 @@ if ! git merge --ff-only --quiet "$upstream"; then
     exit 0
 fi
 
+# BTT preferences may sync between Macs, but script paths and action UUIDs are
+# local. Rebuild the fast-path actions from this Mac's own BTT database after
+# every successful source update.
+if ! /usr/bin/python3 "$ROOT/scripts/install_btt_fast_paths.py"; then
+    echo "NowPlaying updated, but local BetterTouchTool actions could not be refreshed." >&2
+fi
+
 echo "NowPlaying updated to $(git rev-parse --short HEAD); restarting."
 exit 10

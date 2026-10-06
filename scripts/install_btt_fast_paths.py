@@ -4,18 +4,28 @@
 from __future__ import annotations
 
 import json
-import os
-from pathlib import Path
-import socket
 import subprocess
-import urllib.request
 
 
-ROOT = str(Path(__file__).resolve().parents[1])
+# BTT settings sync between Macs. Keep commands home-relative so the same
+# trigger works with different macOS account names on each computer.
+ROOT = "~/NowPlaying"
 SHELL_ACTION_CONFIG = "/bin/zsh:::-c:::-:::"
 READ_SOURCE = (
     "source=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
     "to get_string_variable \"media_source\"' 2>/dev/null)\n"
+)
+READ_SEEK = (
+    "delta=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+    "to get_string_variable \"seek_delta_seconds\"' 2>/dev/null)\n"
+    "source=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+    "to get_string_variable \"media_source\"' 2>/dev/null)\n"
+)
+READ_VOLUME = (
+    "delta=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+    "to get_string_variable \"volume_delta_steps\"' 2>/dev/null)\n"
+    "target=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+    "to get_string_variable \"volume_percent\"' 2>/dev/null)\n"
 )
 
 COMMANDS = {
@@ -29,6 +39,25 @@ COMMANDS = {
         "station=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"playlist_id\"' 2>/dev/null)\n"
         f'exec {ROOT}/play_music_station.sh "$station"'
+    ),
+    "mac_studio_skip_forward": (
+        READ_SEEK + f'exec {ROOT}/media_seek_relative.sh "$delta" "$source"'
+    ),
+    "nowplaying_set_volume": (
+        READ_VOLUME + f'exec {ROOT}/media_volume_adjust.sh "$delta" "$target"'
+    ),
+    "youtube_caption_toggle": f'exec /usr/bin/osascript {ROOT}/youtube_caption_toggle.applescript',
+    "mac_studio_youtube_slower": (
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &\n'
+        f'exec /usr/bin/osascript {ROOT}/youtube_target_command.applescript slower'
+    ),
+    "mac_studio_youtube_faster": (
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &\n'
+        f'exec /usr/bin/osascript {ROOT}/youtube_target_command.applescript faster'
+    ),
+    "mac_mini_youtube_full_screen_toggle": (
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &\n'
+        f'exec /usr/bin/osascript {ROOT}/youtube_target_command.applescript fullscreen'
     ),
 }
 
@@ -68,34 +97,13 @@ end run
 
 def load_local_triggers() -> list[dict]:
     """Read the BTT instance on this Mac, never another Mac's trigger UUIDs."""
-    configured = os.environ.get("BTT_URL", "").rstrip("/")
-    local_ip = ""
-    try:
-        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        probe.connect(("1.1.1.1", 80))
-        local_ip = probe.getsockname()[0]
-        probe.close()
-    except OSError:
-        pass
-    candidates = ([configured] if configured else []) + [
-        "http://127.0.0.1:51520/get_triggers",
-        "http://127.0.0.1:51836/get_triggers",
-    ]
-    if local_ip:
-        candidates += [
-            f"http://{local_ip}:51520/get_triggers",
-            f"http://{local_ip}:51836/get_triggers",
-        ]
-    errors = []
-    for url in candidates:
-        if not url:
-            continue
-        try:
-            with urllib.request.urlopen(url + "/", timeout=2) as response:
-                return json.load(response)
-        except Exception as exc:  # report all attempted local endpoints together
-            errors.append(f"{url}: {exc}")
-    raise SystemExit("Could not read local BTT triggers:\n" + "\n".join(errors))
+    result = subprocess.run(
+        ["/usr/bin/osascript", "-e", 'tell application "BetterTouchTool" to get_triggers'],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(result.stdout)
 
 
 def main() -> int:

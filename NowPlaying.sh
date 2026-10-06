@@ -154,6 +154,32 @@ artwork_version=""
 music_poll_ms=0; browser_poll_ms=0; vlc_poll_ms=0; ha_network_ms=0; loop_work_ms=0; sleep_ms=0; profile_music_ms=0
 profile_browser_ms=0; profile_vlc_ms=0; profile_ha_network_ms=0; profile_sleep_ms=0
 
+nowplaying_version=$(git -C "$NOWPLAYING_ROOT" describe --always --dirty 2>/dev/null || printf 'unknown')
+nowplaying_updated_epoch=$(git -C "$NOWPLAYING_ROOT" log -1 --format=%ct 2>/dev/null || printf '0')
+
+nowplaying_updated_relative() {
+    local updated="${nowplaying_updated_epoch:-0}" now delta value unit
+    [[ "$updated" =~ ^[0-9]+$ ]] || updated=0
+    now=$(epoch_now)
+    delta=$(( now - updated ))
+    (( delta < 0 )) && delta=0
+    if (( delta < 60 )); then
+        printf 'just now'
+    elif (( delta < 3600 )); then
+        value=$(( delta / 60 )); unit="minute"
+        (( value != 1 )) && unit="minutes"
+        printf '%d %s ago' "$value" "$unit"
+    elif (( delta < 86400 )); then
+        value=$(( delta / 3600 )); unit="hour"
+        (( value != 1 )) && unit="hours"
+        printf '%d %s ago' "$value" "$unit"
+    else
+        value=$(( delta / 86400 )); unit="day"
+        (( value != 1 )) && unit="days"
+        printf '%d %s ago' "$value" "$unit"
+    fi
+}
+
 
 # ============================================================
 # Generic Helpers
@@ -249,7 +275,7 @@ draw_startup_screen() {
     printf '\n\n\n\n\n\n\n'
     echo "  -------------------------------------------------------------------"
     echo "     Last Polled Time: --:--:--.--- | Check Interval: --"; echo "     Last HA Update Time: --:--:--.---"
-    echo "     Timing: Music 0ms | Browser 0ms | VLC 0ms | HA 0ms | Sleep 0ms"; echo ""
+    echo "     NowPlaying: $nowplaying_version | Updated $(nowplaying_updated_relative)"; echo ""
 }
 
 
@@ -1192,8 +1218,8 @@ emit_cli() {
     echo "  -------------------------------------------------------------------"
     printf "     Last Polled Time: %-12s | Check Interval: %ss\n" "$last_polled_time" "$next_check_interval"
     echo "     Last HA Update Time: $last_ha_update_time_local"
-    printf "     Timing: Music %dms | Browser %dms | VLC %dms | HA %dms | Sleep %dms\n" "$profile_music_ms" "$profile_browser_ms" "$profile_vlc_ms" "$profile_ha_network_ms" \
-        "$profile_sleep_ms"
+    # printf "     Timing: Music %dms | Browser %dms | VLC %dms | HA %dms | Sleep %dms\n" "$profile_music_ms" "$profile_browser_ms" "$profile_vlc_ms" "$profile_ha_network_ms" "$profile_sleep_ms"
+    echo "     NowPlaying: $nowplaying_version | Updated $(nowplaying_updated_relative)"
     echo ""
 }
 
