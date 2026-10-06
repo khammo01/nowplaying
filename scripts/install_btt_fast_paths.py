@@ -103,6 +103,9 @@ NEW_TRIGGERS = {
     "media_controller_toggle_teams_mute": detached(
         f"/usr/bin/osascript {ROOT}/teams_toggle_mute.applescript"
     ),
+    "media_controller_refresh_teams_mute_state": detached(
+        f"/usr/bin/osascript {ROOT}/teams_mute_state.applescript"
+    ),
     "mac_youtube_play_cached": (
         "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
