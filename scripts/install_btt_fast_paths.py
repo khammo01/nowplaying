@@ -11,6 +11,7 @@ import subprocess
 # trigger works with different macOS account names on each computer.
 ROOT = "~/NowPlaying"
 SHELL_ACTION_CONFIG = "/bin/zsh:::-c:::-:::"
+MEDIA_STATE_EVENT_NOTE = "NowPlaying: refresh on native media play-state changes"
 READ_SOURCE = (
     "source=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
     "to get_string_variable \"media_source\"' 2>/dev/null)\n"
@@ -121,6 +122,35 @@ NEW_TRIGGERS = {
     ),
 }
 
+MEDIA_STATE_EVENT_COMMAND = r'''root="$HOME/NowPlaying"
+cache="$root/cache"
+state_file="$cache/btt-media-state.json"
+lock_dir="$cache/btt-media-state.lock"
+mkdir -p "$cache"
+mkdir "$lock_dir" 2>/dev/null || exit 0
+trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+
+info=$(/usr/bin/osascript -e 'tell application "BetterTouchTool" to get_string_variable "BTTNowPlayingInfoSequoia"' 2>/dev/null)
+playing=$(print -r -- "$info" | /usr/bin/jq -r 'if .isPlaying == true then "true" elif .isPlaying == false then "false" else empty end' 2>/dev/null)
+[[ -n "$playing" ]] || exit 0
+
+previous=$(/usr/bin/jq -r '.is_playing // empty' "$state_file" 2>/dev/null)
+[[ "$playing" != "$previous" ]] || exit 0
+
+observed_at=$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')
+temporary="${state_file}.$$"
+/usr/bin/jq -n --argjson is_playing "$playing" --arg observed_at "$observed_at" \
+  '{is_playing:$is_playing,observed_at:$observed_at}' > "$temporary" || exit 0
+/bin/mv "$temporary" "$state_file"
+
+pid=$(/usr/bin/jq -r '.pid // empty' "$root/cache/nowplaying.lock/lock.json" 2>/dev/null)
+if [[ ! "$pid" =~ ^[0-9]+$ ]]; then
+  pid=$(cat "$root/cache/nowplaying.lock/pid" 2>/dev/null)
+fi
+if [[ "$pid" =~ ^[0-9]+$ ]]; then
+  kill -USR1 "$pid" 2>/dev/null
+fi'''
+
 
 def update_trigger(uuid: str, patch: dict) -> None:
     applescript = """
@@ -146,6 +176,21 @@ def load_local_triggers() -> list[dict]:
         check=True,
     )
     return json.loads(result.stdout)
+
+
+def add_trigger(trigger_json: dict) -> None:
+    applescript = """
+on run argv
+  tell application "BetterTouchTool" to add_new_trigger (item 1 of argv)
+end run
+"""
+    subprocess.run(
+        ["/usr/bin/osascript", "-", json.dumps(trigger_json, separators=(",", ":"))],
+        input=applescript,
+        text=True,
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
 
 
 def main() -> int:
@@ -181,19 +226,54 @@ def main() -> int:
                 }
             ],
         }
-        applescript = """
-on run argv
-  tell application "BetterTouchTool" to add_new_trigger (item 1 of argv)
-end run
-"""
-        subprocess.run(
-            ["/usr/bin/osascript", "-", json.dumps(trigger_json, separators=(",", ":"))],
-            input=applescript,
-            text=True,
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
+        add_trigger(trigger_json)
         print(f"Created {name}")
+
+    media_state_event = next(
+        (
+            item
+            for item in triggers
+            if item.get("BTTTriggerType") == 789
+            and item.get("BTTGestureNotes") == MEDIA_STATE_EVENT_NOTE
+        ),
+        None,
+    )
+    if media_state_event:
+        actions = media_state_event.get("BTTActionsToExecute") or []
+        if not actions:
+            raise SystemExit("Media-state event trigger has no action")
+        update_trigger(
+            actions[0]["BTTUUID"],
+            {
+                "BTTPredefinedActionType": 206,
+                "BTTPredefinedActionName": "Execute Shell Script  or  Task",
+                "BTTShellTaskActionScript": MEDIA_STATE_EVENT_COMMAND,
+                "BTTShellTaskActionConfig": SHELL_ACTION_CONFIG,
+            },
+        )
+        print("Updated native media-state refresh trigger")
+    else:
+        add_trigger(
+            {
+                "BTTTriggerType": 789,
+                "BTTTriggerClass": "BTTTriggerTypeOtherTriggers",
+                # BTTTriggerName aliases BTTAdditionalConfiguration for this trigger
+                # type, so a display name would overwrite the variable being watched.
+                "BTTAdditionalConfiguration": "BTTNowPlayingInfoSequoia",
+                "BTTTriggerTypeDescription": MEDIA_STATE_EVENT_NOTE,
+                "BTTGestureNotes": MEDIA_STATE_EVENT_NOTE,
+                "BTTEnabled2": 1,
+                "BTTActionsToExecute": [
+                    {
+                        "BTTPredefinedActionType": 206,
+                        "BTTPredefinedActionName": "Execute Shell Script  or  Task",
+                        "BTTShellTaskActionScript": MEDIA_STATE_EVENT_COMMAND,
+                        "BTTShellTaskActionConfig": SHELL_ACTION_CONFIG,
+                    }
+                ],
+            }
+        )
+        print("Created native media-state refresh trigger")
     for name, command in COMMANDS.items():
         trigger = by_name.get(name)
         if not trigger:
