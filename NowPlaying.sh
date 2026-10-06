@@ -552,11 +552,9 @@ on replace_chars(this_text, search_string, replacement_string)
 end replace_chars
 with timeout of 5 seconds
     set Q to quote
-    tell application "System Events"
-        if not (exists process "Music") then
-            return "{" & Q & "playing" & Q & ": false}"
-        end if
-    end tell
+    if application "Music" is not running then
+        return "{" & Q & "playing" & Q & ": false}"
+    end if
     tell application "Music"
         if player state is not playing then
             return "{" & Q & "playing" & Q & ": false}"
