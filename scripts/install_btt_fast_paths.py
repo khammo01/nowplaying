@@ -122,34 +122,7 @@ NEW_TRIGGERS = {
     ),
 }
 
-MEDIA_STATE_EVENT_COMMAND = r'''root="$HOME/NowPlaying"
-cache="$root/cache"
-state_file="$cache/btt-media-state.json"
-lock_dir="$cache/btt-media-state.lock"
-mkdir -p "$cache"
-mkdir "$lock_dir" 2>/dev/null || exit 0
-trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
-
-info=$(/usr/bin/osascript -e 'tell application "BetterTouchTool" to get_string_variable "BTTNowPlayingInfoSequoia"' 2>/dev/null)
-playing=$(print -r -- "$info" | /usr/bin/jq -r 'if .isPlaying == true then "true" elif .isPlaying == false then "false" else empty end' 2>/dev/null)
-[[ -n "$playing" ]] || exit 0
-
-previous=$(/usr/bin/jq -r '.is_playing // empty' "$state_file" 2>/dev/null)
-[[ "$playing" != "$previous" ]] || exit 0
-
-observed_at=$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')
-temporary="${state_file}.$$"
-/usr/bin/jq -n --argjson is_playing "$playing" --arg observed_at "$observed_at" \
-  '{is_playing:$is_playing,observed_at:$observed_at}' > "$temporary" || exit 0
-/bin/mv "$temporary" "$state_file"
-
-pid=$(/usr/bin/jq -r '.pid // empty' "$root/cache/nowplaying.lock/lock.json" 2>/dev/null)
-if [[ ! "$pid" =~ ^[0-9]+$ ]]; then
-  pid=$(cat "$root/cache/nowplaying.lock/pid" 2>/dev/null)
-fi
-if [[ "$pid" =~ ^[0-9]+$ ]]; then
-  kill -USR1 "$pid" 2>/dev/null
-fi'''
+MEDIA_STATE_EVENT_COMMAND = detached(f"{ROOT}/media_remote_fast_path.sh")
 
 
 def update_trigger(uuid: str, patch: dict) -> None:

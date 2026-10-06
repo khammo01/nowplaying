@@ -128,11 +128,12 @@ last_auto_update_check=0
 # Media State / Metadata
 # ============================================================
 
-media_status="Idle"; music_playing="false"; youtube_playing="false"; idle_start_epoch=""; idle_duration=0
+media_status="Idle"; music_playing="false"; youtube_playing="false"; media_remote_playing="false"; idle_start_epoch=""; idle_duration=0
 track="startup"; artist="startup"; album="startup"; genre="startup"; year="startup"; summary=""; description="startup"
 view_count=""; published_date=""; subscriber_count=""
 thumbnail_url="/local/default_music.jpg"; duration_hms="00:00"; duration_sec=0; currentTime=0; currentTimehms="00:00"
 playback_speed="1.0"; playback_position_percent=0; volume_percent=0; progress_bar_full=""; playlist_name=""; video_id=""; url=""; media_source=""
+btt_track=""; btt_artist=""; btt_album=""; btt_app_name=""; btt_bundle_id=""; btt_parent_bundle_id=""; btt_duration_sec=0; btt_media_source="mediaremote"
 
 
 # ============================================================
@@ -682,6 +683,73 @@ parse_video_json() {
     fi
 }
 
+read_media_remote_defaults() {
+    osascript -e \
+        'tell application "BetterTouchTool" to get_string_variable "BTTNowPlayingInfoSequoia"' \
+        2>/dev/null || printf '{}'
+}
+parse_media_remote_json() {
+    local json="$1" row parsed_playing
+    row=$(
+        jq -r '
+            if (.isPlaying | type) != "boolean" then empty else
+            [
+                (.isPlaying | tostring),
+                (.title // ""),
+                (.artist // ""),
+                (.album // ""),
+                (.appName // ""),
+                (.bundleIdentifier // ""),
+                (.parentBundleIdentifier // ""),
+                ((.duration // 0) | tonumber? // 0 | floor)
+            ]
+            | map(tostring | gsub("[\r\n]"; " ") | gsub("\u001f"; " "))
+            | join("\u001f") end
+        ' <<< "$json" 2>/dev/null
+    ) || row=""
+    if [[ -z "$row" ]]; then
+        media_remote_playing="false"
+        btt_track=""; btt_artist=""; btt_album=""; btt_app_name=""; btt_bundle_id=""; btt_parent_bundle_id=""; btt_duration_sec=0
+        return
+    fi
+    IFS=$'\x1f' read -r parsed_playing btt_track btt_artist btt_album btt_app_name btt_bundle_id btt_parent_bundle_id btt_duration_sec <<< "$row"
+    media_remote_playing="$parsed_playing"
+    normalize_bools media_remote_playing
+    normalize_ints btt_duration_sec
+    local effective_bundle_id="${btt_parent_bundle_id:-$btt_bundle_id}"
+    case "$effective_bundle_id" in
+        com.apple.Music) btt_media_source="music" ;;
+        org.videolan.vlc|org.videolan.vlc*) btt_media_source="vlc" ;;
+        com.apple.Safari|com.google.Chrome|com.google.Chrome.*) btt_media_source="browser" ;;
+        *) btt_media_source="mediaremote" ;;
+    esac
+}
+apply_media_remote_defaults() {
+    [[ "$media_remote_playing" == "true" ]] || return
+    if [[ "$music_playing" == "true" || "$youtube_playing" == "true" ]]; then
+        case "$media_source:$btt_media_source" in
+            music:music|youtube:browser|vlc:vlc) ;;
+            *) return ;;
+        esac
+        [[ -n "$track" ]] || track="$btt_track"
+        [[ -n "$artist" ]] || artist="${btt_artist:-$btt_app_name}"
+        [[ -n "$album" ]] || album="$btt_album"
+        (( duration_sec > 0 )) || duration_sec="$btt_duration_sec"
+        return
+    fi
+
+    # A native player is already active but the source-specific scan has not
+    # completed. Replace stale prior-media fields with MediaRemote defaults.
+    media_source="$btt_media_source"
+    track="${btt_track:-Loading media…}"
+    artist="${btt_artist:-${btt_app_name:-Detecting source…}}"
+    album="${btt_album:-$btt_app_name}"
+    genre=""; year=""; summary=""; description=""
+    view_count=""; published_date=""; subscriber_count=""; playlist_name=""
+    url=""; video_id=""; thumbnail_url=""; playback_speed="1.0"
+    duration_sec="$btt_duration_sec"; currentTime=0
+}
+
 
 # ============================================================
 # Persistence
@@ -778,6 +846,8 @@ resolve_media_status() {
         media_status="Music"
     elif [[ "$youtube_playing" == "true" ]]; then
         media_status="YouTube"
+    elif [[ "$media_remote_playing" == "true" ]]; then
+        media_status="Playing"
     elif [[ -n "$last_known_track" &&
             "$idle_duration" -lt "$PAUSED_WINDOW_SEC" ]]; then
         media_status="Paused"
@@ -857,7 +927,8 @@ should_emit() {
         return 0
     fi
     if [[ "$media_status" == "Music" ||
-          "$media_status" == "YouTube" ]]; then
+          "$media_status" == "YouTube" ||
+          "$media_status" == "Playing" ]]; then
         last_emitted_state="$media_status"; last_idle_bucket=""; return 0
     fi
     if [[ "$media_status" == "Paused" ]]; then
@@ -887,7 +958,7 @@ choose_check_interval() {
     local d="$idle_duration"
     [[ "$d" =~ ^[0-9]+$ ]] || d=0
     case "$media_status" in
-        Music|YouTube)
+        Music|YouTube|Playing)
             next_check_interval="$ACTIVE_CHECK_INTERVAL"
             ;;
         Paused)
@@ -916,7 +987,8 @@ choose_check_interval() {
 refresh_ha_media_active_state() {
     local desired_state service payload
     if [[ "$music_playing" == "true" ||
-          "$youtube_playing" == "true" ]]; then
+          "$youtube_playing" == "true" ||
+          "$media_remote_playing" == "true" ]]; then
         desired_state="Active"; service="turn_on"
     else
         desired_state="Idle"; service="turn_off"
@@ -1190,6 +1262,16 @@ emit_cli() {
         printf '\n\n\n\n'
         echo "                            $currentTimehms / $duration_hms"
         cecho "   $progress_bar_full"
+    elif [[ "$media_status" == "Playing" ]]; then
+        printf '\n\n'
+        echo "                     Playing - Loading Details"
+        echo "  -------------------------------------------------------------------"
+        printf '\n\n\n\n'
+        print_title_lines "$track" "     Title:           " 4
+        echo "     Artist:          $artist"
+        echo "     Source:          ${btt_app_name:-$media_source}"
+        echo "     Duration:        $duration_hms"
+        printf '\n\n\n\n\n'
     elif [[ "$media_status" == "Paused" ]]; then
         printf '\n\n'
         echo "                     Most Recent Media - Paused"
@@ -1243,6 +1325,8 @@ while true; do
     immediate_poll_requested="false"
     loop_start_ms=$(timestamp_ms)
     loop_now_epoch=$(epoch_now)
+    media_remote_json=$(read_media_remote_defaults)
+    parse_media_remote_json "$media_remote_json"
     # ========================================================
     # SENSOR READ — Music.app
     # ========================================================
@@ -1316,6 +1400,7 @@ while true; do
             debugecho "DEBUG VLC not running. Skipping VLC AppleScript."
         fi
     fi
+    apply_media_remote_defaults
     # ========================================================
     # Poll completed
     # ========================================================
@@ -1352,7 +1437,8 @@ while true; do
     fi
     debugecho "DEBUG Polling status=$media_status idle=${idle_duration}s next=${next_check_interval}s"
     if [[ "$media_status" == "Music" ||
-          "$media_status" == "YouTube" ]]; then
+          "$media_status" == "YouTube" ||
+          "$media_status" == "Playing" ]]; then
         debugecho "DEBUG Snapshotting last known media"
         snapshot_last_known_media
     fi
