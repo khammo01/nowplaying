@@ -71,6 +71,6 @@ case "$media_source:$command_name" in
     exit 2
     ;;
 esac
-status=$?
-(( status == 0 )) && signal_refresh
-exit "$status"
+exit_status=$?
+(( exit_status == 0 )) && signal_refresh
+exit "$exit_status"

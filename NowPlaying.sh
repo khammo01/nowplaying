@@ -619,6 +619,7 @@ parse_music_json() {
     IFS=$'\x1f' read -r parsed_playing parsed_track parsed_artist parsed_album parsed_genre parsed_year parsed_duration parsed_position <<< "$row"
     music_playing="$parsed_playing"; normalize_bools music_playing
     if [[ "$music_playing" == "true" ]]; then
+        media_source="music"
         track="$parsed_track"; artist="$parsed_artist"; album="$parsed_album"; genre="$parsed_genre"
         year="$parsed_year"; duration_sec="$parsed_duration"; currentTime="$parsed_position"
         # Browser/VLC descriptive metadata must never leak into the next Music

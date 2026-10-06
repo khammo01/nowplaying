@@ -28,36 +28,50 @@ READ_VOLUME = (
     "to get_string_variable \"volume_percent\"' 2>/dev/null)\n"
 )
 
+
+def detached(command: str, acknowledgement: str = "queued") -> str:
+    """Launch a media command without holding BTT's HTTP request open."""
+    return (
+        'mkdir -p "$HOME/NowPlaying/cache"\n'
+        f'({command}) </dev/null >>"$HOME/NowPlaying/cache/btt-media-actions.log" 2>&1 &!\n'
+        f'print -r -- {json.dumps(acknowledgement)}'
+    )
+
 COMMANDS = {
-    "playpause_toggle": READ_SOURCE + f'exec {ROOT}/media_command.sh playpause "$source"',
-    "mac_studio_next_song": READ_SOURCE + f'exec {ROOT}/media_command.sh next "$source"',
-    "mac_mini_previous_song": READ_SOURCE + f'exec {ROOT}/media_command.sh previous "$source"',
-    "mac_studio_open_youtube": f'exec {ROOT}/youtube_action_with_feedback.sh open',
-    "mac_youtube_play": f'exec {ROOT}/youtube_action_with_feedback.sh play',
-    "mac_youtube_surprise_me": f'exec {ROOT}/youtube_action_with_feedback.sh surprise',
+    "playpause_toggle": READ_SOURCE + detached(f'{ROOT}/media_command.sh playpause "$source"'),
+    "mac_studio_next_song": READ_SOURCE + detached(f'{ROOT}/media_command.sh next "$source"'),
+    "mac_mini_previous_song": READ_SOURCE + detached(f'{ROOT}/media_command.sh previous "$source"'),
+    "mac_studio_open_youtube": detached(f'{ROOT}/youtube_action_with_feedback.sh open'),
+    "mac_youtube_play": detached(f'{ROOT}/youtube_action_with_feedback.sh play'),
+    "mac_youtube_surprise_me": detached(f'{ROOT}/youtube_action_with_feedback.sh surprise'),
     "mac_mini_play_apple_music_playlist": (
         "station=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"playlist_id\"' 2>/dev/null)\n"
-        f'exec {ROOT}/play_music_station.sh "$station"'
+        'mkdir -p "$HOME/NowPlaying/cache"\n'
+        f'({ROOT}/play_music_station.sh "$station") </dev/null '
+        '>>"$HOME/NowPlaying/cache/btt-media-actions.log" 2>&1 &!\n'
+        'print -r -- "$station"'
     ),
     "mac_studio_skip_forward": (
-        READ_SEEK + f'exec {ROOT}/media_seek_relative.sh "$delta" "$source"'
+        READ_SEEK + detached(f'{ROOT}/media_seek_relative.sh "$delta" "$source"')
     ),
     "nowplaying_set_volume": (
-        READ_VOLUME + f'exec {ROOT}/media_volume_adjust.sh "$delta" "$target"'
+        READ_VOLUME + detached(f'{ROOT}/media_volume_adjust.sh "$delta" "$target"')
     ),
-    "youtube_caption_toggle": f'exec /usr/bin/osascript {ROOT}/youtube_caption_toggle.applescript',
-    "mac_studio_youtube_slower": (
-        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &\n'
-        f'exec /usr/bin/osascript {ROOT}/youtube_target_command.applescript slower'
+    "youtube_caption_toggle": detached(
+        f'/usr/bin/osascript {ROOT}/youtube_caption_toggle.applescript'
     ),
-    "mac_studio_youtube_faster": (
-        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &\n'
-        f'exec /usr/bin/osascript {ROOT}/youtube_target_command.applescript faster'
+    "mac_studio_youtube_slower": detached(
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 & '
+        f'/usr/bin/osascript {ROOT}/youtube_target_command.applescript slower'
     ),
-    "mac_mini_youtube_full_screen_toggle": (
-        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &\n'
-        f'exec /usr/bin/osascript {ROOT}/youtube_target_command.applescript fullscreen'
+    "mac_studio_youtube_faster": detached(
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 & '
+        f'/usr/bin/osascript {ROOT}/youtube_target_command.applescript faster'
+    ),
+    "mac_mini_youtube_full_screen_toggle": detached(
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 & '
+        f'/usr/bin/osascript {ROOT}/youtube_target_command.applescript fullscreen'
     ),
     "nowplaying_refresh": (
         'root="$HOME/NowPlaying"\n'
@@ -68,12 +82,12 @@ COMMANDS = {
 }
 
 NEW_TRIGGERS = {
-    "mac_youtube_home": f'exec {ROOT}/youtube_action_with_feedback.sh home',
-    "media_controller_open_teams": "exec /usr/bin/open -a 'Microsoft Teams'",
+    "mac_youtube_home": detached(f'{ROOT}/youtube_action_with_feedback.sh home'),
+    "media_controller_open_teams": detached("/usr/bin/open -a 'Microsoft Teams'"),
     "mac_youtube_play_cached": (
         "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
-        f'exec /usr/bin/osascript {ROOT}/youtube_control.applescript play_id "$video_id"'
+        + detached(f'/usr/bin/osascript {ROOT}/youtube_control.applescript play_id "$video_id"')
     ),
     "media_controller_set_input_volume": (
         "target=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
