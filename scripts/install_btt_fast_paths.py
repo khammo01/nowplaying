@@ -288,13 +288,14 @@ def main() -> int:
             )
             print("Updated playlist HUD")
         if name == "mac_studio_skip_forward":
-            # Progress-slider seeks include their destination as a BTT variable.
-            # Showing that value avoids the old hard-coded "+10s" feedback.
+            # Show the requested seek delta. The destination percentage can be a
+            # small value such as 5% or 10%, which looks like the wrong skip size
+            # when a 30-second control was pressed.
             update_trigger(
                 trigger["BTTUUID"],
                 {
                     "BTTTriggerConfig": {
-                        "BTTHUDText": "Seeking… {seek_target_percent}%",
+                        "BTTHUDText": "Skip {seek_delta_seconds}s",
                         "BTTShowHUD": 1,
                     }
                 },
