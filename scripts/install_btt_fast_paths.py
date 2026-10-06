@@ -37,13 +37,24 @@ def detached(command: str, acknowledgement: str = "queued") -> str:
         f'print -r -- {json.dumps(acknowledgement)}'
     )
 
+
+def youtube_detached(action: str) -> str:
+    """Acknowledge the press before browser discovery begins."""
+    return (
+        'click="$HOME/NowPlaying/assets/youtube-click.wav"\n'
+        'if [[ -f "$click" ]]; then /usr/bin/afplay "$click" >/dev/null 2>&1 &!; fi\n'
+        + detached(
+            f'NAGBOT_FEEDBACK_ALREADY_PLAYED=1 {ROOT}/youtube_action_with_feedback.sh {action}'
+        )
+    )
+
 COMMANDS = {
     "playpause_toggle": READ_SOURCE + detached(f'{ROOT}/media_command.sh playpause "$source"'),
     "mac_studio_next_song": READ_SOURCE + detached(f'{ROOT}/media_command.sh next "$source"'),
     "mac_mini_previous_song": READ_SOURCE + detached(f'{ROOT}/media_command.sh previous "$source"'),
-    "mac_studio_open_youtube": detached(f'{ROOT}/youtube_action_with_feedback.sh open'),
-    "mac_youtube_play": detached(f'{ROOT}/youtube_action_with_feedback.sh play'),
-    "mac_youtube_surprise_me": detached(f'{ROOT}/youtube_action_with_feedback.sh surprise'),
+    "mac_studio_open_youtube": youtube_detached("open"),
+    "mac_youtube_play": youtube_detached("play"),
+    "mac_youtube_surprise_me": youtube_detached("surprise"),
     "mac_mini_play_apple_music_playlist": (
         "station=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"playlist_id\"' 2>/dev/null)\n"
@@ -82,7 +93,7 @@ COMMANDS = {
 }
 
 NEW_TRIGGERS = {
-    "mac_youtube_home": detached(f'{ROOT}/youtube_action_with_feedback.sh home'),
+    "mac_youtube_home": youtube_detached("home"),
     "media_controller_open_teams": detached("/usr/bin/open -a 'Microsoft Teams'"),
     "mac_youtube_play_cached": (
         "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "

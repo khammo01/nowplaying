@@ -15,8 +15,11 @@ case "$action" in
   *) exit 2 ;;
 esac
 
-# Feedback starts before any browser enumeration or Shortcut/App launch.
-[[ -f "$click_sound" ]] && /usr/bin/afplay "$click_sound" >/dev/null 2>&1 &
+# BTT normally plays this before launching the worker so acknowledgement is
+# instantaneous. Keep this fallback for direct command-line invocations.
+if [[ "${NAGBOT_FEEDBACK_ALREADY_PLAYED:-0}" != "1" && -f "$click_sound" ]]; then
+  /usr/bin/afplay "$click_sound" >/dev/null 2>&1 &
+fi
 
 if [[ "$action" == "next" ]]; then
   /usr/bin/osascript "$root/next_youtube_video.applescript" > /tmp/nagbot-youtube-action-result 2>&1 &
