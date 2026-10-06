@@ -3,6 +3,10 @@ set -u
 
 delta="${1:-0}"
 source="${2:-}"
+# Forward seeks may include an explicit plus sign so BetterTouchTool can show
+# symmetric HUD feedback (for example, +30s and -10s). Normalize it before
+# passing the numeric value to AppleScript.
+[[ "$delta" == +* ]] && delta="${delta#+}"
 if ! [[ "$delta" =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
   exit 2
 fi
