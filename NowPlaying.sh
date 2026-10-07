@@ -843,6 +843,9 @@ resolve_media_status() {
     if [[ "$music_playing" == "true" ]]; then
         media_status="Music"
     elif [[ "$youtube_playing" == "true" ]]; then
+        # Keep the long-established video state for dashboard compatibility;
+        # media_source distinguishes VLC from browser video everywhere that
+        # source-specific controls or labels are needed.
         media_status="YouTube"
     elif [[ "$media_remote_playing" == "true" ]]; then
         media_status="Playing"
@@ -1075,6 +1078,9 @@ emit_home_assistant() {
     normalize_bools youtube_playing music_playing
     sanitize_vars track artist album genre year summary description view_count published_date subscriber_count media_status media_source currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
+    local reported_video_playing="$youtube_playing"
+    local reported_youtube_playing="$youtube_playing"
+    [[ "$media_source" == "youtube" ]] || reported_youtube_playing="false"
     local youtube_queue='[]'
     if [[ -s "$CACHE_ROOT/browser-inventory.json" ]]; then
         youtube_queue=$(jq -c --arg active_video_id "$video_id" '
@@ -1100,7 +1106,7 @@ emit_home_assistant() {
             --arg media_status "$media_status" --arg currentTime "$currentTimehms" --arg duration "$duration_hms" --arg playback_speed "$playback_speed" \
             --arg playlist "$playlist_name" --arg progress_bar_full "$progress_bar_full" --arg url "$url" --arg video_id "$video_id" --arg thumbnail "$thumbnail_url" --arg artwork_version "$artwork_version" \
             --argjson schema_version "$PAYLOAD_SCHEMA_VERSION" \
-            --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson youtube_playing "$youtube_playing" \
+            --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson video_playing "$reported_video_playing" --argjson youtube_playing "$reported_youtube_playing" \
             --argjson volume_percent "$volume_percent" \
             --argjson youtube_queue "$youtube_queue" \
             --argjson music_app_playing "$music_playing" --argjson total_videos_watched "$youtube_video_count" --argjson high_score "$high_score" \
@@ -1130,6 +1136,7 @@ emit_home_assistant() {
                 playback_position_percent: $playback_position_percent,
                 volume_percent: $volume_percent,
                 playback_speed: $playback_speed,
+                video_playing: $video_playing,
                 youtube_playing: $youtube_playing,
                 music_app_playing: $music_app_playing,
                 total_videos_watched: $total_videos_watched,

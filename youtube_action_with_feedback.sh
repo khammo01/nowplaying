@@ -44,8 +44,17 @@ detail="${result#OK|}"
 # Refresh only after the browser has accepted the command; the former HA-side
 # 120/350 ms refreshes ran before slow tab changes had completed.
 if [[ "$action" != "open" && "$action" != "home" ]]; then
-  local_ip="$(/usr/sbin/ipconfig getifaddr en0 2>/dev/null || true)"
-  for base in "http://${local_ip}:51520" "http://${local_ip}:51836" "http://192.168.1.26:51520"; do
+  computer_name=$(/usr/sbin/scutil --get ComputerName 2>/dev/null || /bin/hostname -s)
+  if [[ "${computer_name:l}" == *"mac mini"* || "${computer_name:l}" == *"mac-mini"* ]]; then
+    btt_candidates=("http://192.168.1.26:51520")
+  elif [[ "${computer_name:l}" == *"macbook"* || "${computer_name:l}" == *"work mac"* ]]; then
+    btt_candidates=("http://192.168.1.179:51520")
+  else
+    local_ip="$(/usr/sbin/ipconfig getifaddr en0 2>/dev/null || true)"
+    [[ -z "$local_ip" ]] && local_ip="$(/usr/sbin/ipconfig getifaddr en1 2>/dev/null || true)"
+    btt_candidates=("http://${local_ip}:51520" "http://${local_ip}:51836")
+  fi
+  for base in "${btt_candidates[@]}"; do
     [[ "$base" == "http://:51520" || "$base" == "http://:51836" ]] && continue
     /usr/bin/curl -fsS --max-time 1 "$base/trigger_named_async_without_response/?trigger_name=nowplaying_refresh" >/dev/null 2>&1 && break
   done

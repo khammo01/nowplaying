@@ -66,11 +66,14 @@ case "$media_source:$command_name" in
   vlc:seek_relative)
     "$root/media_seek_relative.sh" "$value" vlc
     ;;
+  vlc:fullscreen)
+    /usr/bin/osascript -e 'tell application "VLC" to set fullscreen mode to not fullscreen mode'
+    ;;
   *)
     print -u2 -- "Unsupported media command: source=$media_source command=$command_name"
     exit 2
     ;;
 esac
-exit_status=$?
-(( exit_status == 0 )) && signal_refresh
-exit "$exit_status"
+command_exit_status=$?
+(( command_exit_status == 0 )) && signal_refresh
+exit "$command_exit_status"

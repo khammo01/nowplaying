@@ -3,8 +3,10 @@
 !/.gitignore
 !/NowPlaying.sh
 !/media_seek_relative.sh
+!/media_volume_adjust.sh
 !/media_command.sh
 !/media_remote_fast_path.sh
+!/play_music_station.sh
 !/youtube_action_with_feedback.sh
 !/refresh_browser_cache.sh
 !/update_browser_cache.py

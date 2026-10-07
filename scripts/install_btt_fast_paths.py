@@ -25,8 +25,6 @@ READ_SEEK = (
 READ_VOLUME = (
     "delta=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
     "to get_string_variable \"volume_delta_steps\"' 2>/dev/null)\n"
-    "target=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
-    "to get_string_variable \"volume_percent\"' 2>/dev/null)\n"
 )
 
 
@@ -68,7 +66,7 @@ COMMANDS = {
         READ_SEEK + detached(f'{ROOT}/media_seek_relative.sh "$delta" "$source"')
     ),
     "nowplaying_set_volume": (
-        READ_VOLUME + detached(f'{ROOT}/media_volume_adjust.sh "$delta" "$target"')
+        READ_VOLUME + detached(f'{ROOT}/media_volume_adjust.sh "$delta"')
     ),
     "youtube_caption_toggle": detached(
         f'/usr/bin/osascript {ROOT}/youtube_caption_toggle.applescript'
@@ -120,6 +118,8 @@ NEW_TRIGGERS = {
         "(( target > 100 )) && target=100\n"
         "exec /usr/bin/osascript -e \"set volume output volume $target\""
     ),
+    "vlc_fullscreen": detached(f'{ROOT}/media_command.sh fullscreen vlc'),
+    "vlc_next": detached(f'{ROOT}/media_command.sh next vlc'),
 }
 
 MEDIA_STATE_EVENT_COMMAND = detached(f"{ROOT}/media_remote_fast_path.sh")

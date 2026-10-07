@@ -1,11 +1,10 @@
--- Music's `shuffle enabled` property can report state while silently ignoring
--- writes. Press the native mini-player Shuffle control instead.
-tell application "System Events"
-	tell process "Music"
-		set mainSplit to first UI element of window "Music" whose role is "AXSplitGroup"
-		set mainGroups to every UI element of mainSplit whose role is "AXGroup"
-		set miniWrapper to first UI element of item 2 of mainGroups whose role is "AXGroup"
-		set miniPlayer to first UI element of miniWrapper whose role is "AXGroup"
-		perform action "AXPress" of first button of miniPlayer
-	end tell
+-- The dashboard action means "start shuffled playback now", not merely change
+-- the hidden Up Next ordering. Starting the Library as the shuffled context
+-- also escapes radio-station URL tracks, which forcibly disable shuffle.
+tell application "Music"
+	if not running then launch
+	set shuffle mode to songs
+	set shuffle enabled to true
+	play library playlist 1
+	return "shuffled-library-playing"
 end tell
