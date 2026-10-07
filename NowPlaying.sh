@@ -1089,7 +1089,9 @@ emit_home_assistant() {
              | {
                  title: ((.title // "YouTube") | sub(" - YouTube$"; "") | .[0:72]),
                  video_id: (try (.url | capture("(?:[?&]v=|/shorts/|youtu\\.be/)(?<id>[^?&#/]+)").id) catch ""),
-                 author: ((.media_metadata.author // "YouTube") | .[0:40]),
+                 author: (if ((.media_metadata.author // "") | length) > 0
+                          then .media_metadata.author[0:40]
+                          else "YouTube" end),
                  duration_sec: ((.media_metadata.duration_sec // 0) | tonumber? // 0 | floor)
                }
              | select(.video_id != "" and .video_id != $active_video_id)
