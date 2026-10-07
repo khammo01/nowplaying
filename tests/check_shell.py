@@ -37,7 +37,7 @@ OMDB_API_KEY=test-only
             'ps': '#!/bin/bash\necho "2.5 coreaudiod"\n',
             'scp': '#!/bin/bash\nexit 0\n',
             'ssh': '#!/bin/bash\nexit 0\n',
-            'curl': '#!/usr/bin/python3\nimport json,os,sys\nwith open(os.environ["MOCK_REQUESTS"],"a") as f: f.write(json.dumps(sys.argv[1:])+"\\n")\nprint("200",end="")\n',
+            'curl': '#!/usr/bin/python3\nimport json,os,sys\nargs=sys.argv[1:]\nwith open(os.environ["MOCK_REQUESTS"],"a") as f: f.write(json.dumps(args)+"\\n")\nif any("img.youtube.com" in arg for arg in args) and "-o" in args:\n open(args[args.index("-o")+1],"wb").write(b"0"*16001)\nprint("200",end="")\n',
         }
         for name, content in commands.items():
             p = mock / name

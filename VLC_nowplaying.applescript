@@ -156,44 +156,57 @@ on probe_vlc()
 	set out_name to ""
 	set out_duration to ""
 	set out_time to ""
-	
+
 	try
-		tell application "VLC"
-			if it is not running then
-				return "{\"playing\":\"false\",\"raw_name\":\"\",\"media_path\":\"\",\"duration\":\"\",\"position\":\"\",\"probe_error\":\"VLC not running\"}"
-			end if
-			
-			try
-					-- Current VLC releases expose their scripting dictionary normally.
-					-- The legacy four-character codes now stringify as their property
-					-- names, which looks valid but prevents playback detection.
-					set out_playing to (playing as text)
-			end try
-			
-			try
-					set out_path to (path of current item) as text
-			end try
-			
-			try
-					set out_name to (name of current item) as text
-			end try
-			
-			try
-					set out_duration to (duration of current item) as text
-			end try
-			
-			try
-					set out_time to (current time) as text
-			end try
-		end tell
+		if application "VLC" is not running then
+			return "{\"playing\":\"false\",\"raw_name\":\"\",\"media_path\":\"\",\"duration\":\"\",\"position\":\"\",\"probe_error\":\"VLC not running\"}"
+		end if
+
+		-- Compile the current VLC dictionary terms at runtime. This keeps the
+		-- source compatible with older VLC builds whose dictionary does not expose
+		-- these names, while newer builds return real values instead of the legacy
+		-- four-character property names.
+		set modern_values to {}
+		try
+			set modern_values to run script "tell application \"VLC\"\nreturn {(playing as text), ((path of current item) as text), ((name of current item) as text), ((duration of current item) as text), ((current time) as text)}\nend tell"
+		end try
+		if (count of modern_values) is 5 then
+			set out_playing to item 1 of modern_values
+			set out_path to item 2 of modern_values
+			set out_name to item 3 of modern_values
+			set out_duration to item 4 of modern_values
+			set out_time to item 5 of modern_values
+		else
+			tell application "VLC"
+				try
+					set out_playing to («class AAPL» as text)
+				end try
+
+				try
+					set out_path to («class AAPA») as text
+				end try
+
+				try
+					set out_name to («class AANA») as text
+				end try
+
+				try
+					set out_duration to («class AADU») as text
+				end try
+
+				try
+					set out_time to («class AACT») as text
+				end try
+			end tell
+		end if
 	on error errMsg
 		return "{\"playing\":\"false\",\"raw_name\":\"\",\"media_path\":\"\",\"duration\":\"\",\"position\":\"\",\"probe_error\":\"" & my escape_json_string(errMsg) & "\"}"
 	end try
-	
+
 	if out_name is "" and out_path is "" then
 		return "{\"playing\":\"false\",\"raw_name\":\"\",\"media_path\":\"\",\"duration\":\"\",\"position\":\"\",\"probe_error\":\"No media loaded\"}"
 	end if
-	
+
 	return "{\"playing\":\"" & my escape_json_string(out_playing) & "\",\"raw_name\":\"" & my escape_json_string(out_name) & "\",\"media_path\":\"" & my escape_json_string(out_path) & "\",\"duration\":\"" & my escape_json_string(out_duration) & "\",\"position\":\"" & my escape_json_string(out_time) & "\",\"probe_error\":\"\"}"
 end probe_vlc
 
