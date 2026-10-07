@@ -61,5 +61,6 @@ OMDB_API_KEY=test-only
         assert 'queued456' in queue_ids, payload['youtube_queue']
         assert ('active123' not in queue_ids) == playing, payload['youtube_queue']
         queued = next(item for item in payload['youtube_queue'] if item['video_id'] == 'queued456')
-        assert queued['thumbnail_url'] == 'https://i.ytimg.com/vi/queued456/mqdefault.jpg', queued
+        assert queued['author'] == 'YouTube', queued
+        assert queued['duration_sec'] == 0, queued
 print('Passed idle/playing orchestration checks with isolated config and mocked network.')

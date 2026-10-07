@@ -1088,10 +1088,12 @@ emit_home_assistant() {
              | select(.is_youtube_video == true)
              | {
                  title: ((.title // "YouTube") | sub(" - YouTube$"; "") | .[0:72]),
-                 video_id: (try (.url | capture("(?:[?&]v=|/shorts/|youtu\\.be/)(?<id>[^?&#/]+)").id) catch "")
+                 video_id: (try (.url | capture("(?:[?&]v=|/shorts/|youtu\\.be/)(?<id>[^?&#/]+)").id) catch ""),
+                 author: ((.media_metadata.author // "YouTube") | .[0:40]),
+                 duration_sec: ((.media_metadata.duration_sec // 0) | tonumber? // 0 | floor)
                }
              | select(.video_id != "" and .video_id != $active_video_id)
-             | .thumbnail_url = ("https://i.ytimg.com/vi/" + .video_id + "/mqdefault.jpg")]
+            ]
             | unique_by(.video_id)
             | .[:6]
         ' "$CACHE_ROOT/browser-inventory.json" 2>/dev/null || printf '[]')

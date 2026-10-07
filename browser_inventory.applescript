@@ -1,6 +1,6 @@
--- Lightweight browser inventory for the NowPlaying cache.
--- This intentionally reads URL/title/selection only. It never executes
--- JavaScript in every tab, so it is safe to refresh in the background.
+-- Lightweight browser inventory for the NowPlaying cache. YouTube video tabs
+-- also expose their already-loaded channel and duration so small controllers
+-- can render useful queue cards without downloading artwork.
 
 on escape_json(valueText)
 	set s to valueText as text
@@ -45,13 +45,15 @@ on is_media_page(theURL)
 	return false
 end is_media_page
 
-on tab_json(browserName, windowID, windowIndex, tabIndex, tabURL, tabTitle, selectedTab)
+on tab_json(browserName, windowID, windowIndex, tabIndex, tabURL, tabTitle, selectedTab, mediaMetadata)
 	set youtubePage to my is_youtube_page(tabURL)
 	set youtubeVideo to my is_youtube_video(tabURL)
 	set mediaPage to my is_media_page(tabURL)
 	if not youtubePage and not mediaPage then return ""
-	return "{\"browser\":\"" & browserName & "\",\"window_id\":" & windowID & ",\"window_index\":" & windowIndex & ",\"tab_index\":" & tabIndex & ",\"url\":\"" & my escape_json(tabURL) & "\",\"title\":\"" & my escape_json(tabTitle) & "\",\"selected\":" & selectedTab & ",\"is_youtube_page\":" & youtubePage & ",\"is_youtube_video\":" & youtubeVideo & ",\"is_media_page\":" & mediaPage & "}"
+	return "{\"browser\":\"" & browserName & "\",\"window_id\":" & windowID & ",\"window_index\":" & windowIndex & ",\"tab_index\":" & tabIndex & ",\"url\":\"" & my escape_json(tabURL) & "\",\"title\":\"" & my escape_json(tabTitle) & "\",\"selected\":" & selectedTab & ",\"is_youtube_page\":" & youtubePage & ",\"is_youtube_video\":" & youtubeVideo & ",\"is_media_page\":" & mediaPage & ",\"media_metadata\":" & mediaMetadata & "}"
 end tab_json
+
+set youtubeMetadataScript to "(()=>{const d=window.ytInitialPlayerResponse?.videoDetails||{};const v=document.querySelector('video');const a=(document.querySelector('#owner #channel-name a,ytd-channel-name a,#channel-name a')?.textContent||d.author||'').trim();const n=Number(v?.duration||d.lengthSeconds||0);return JSON.stringify({author:a,duration_sec:Number.isFinite(n)?Math.round(n):0})})()"
 
 set entries to {}
 
@@ -73,7 +75,13 @@ if application "Safari" is running then
 			repeat with ti from 1 to count of tabs of w
 				try
 					set t to tab ti of w
-					set rowJSON to my tab_json("Safari", wid, wi, ti, URL of t, name of t, ti is selectedIndex)
+					set mediaMetadata to "{}"
+					if my is_youtube_video(URL of t) then
+						try
+							set mediaMetadata to do JavaScript youtubeMetadataScript in t
+						end try
+					end if
+					set rowJSON to my tab_json("Safari", wid, wi, ti, URL of t, name of t, ti is selectedIndex, mediaMetadata)
 					if rowJSON is not "" then set end of entries to rowJSON
 				end try
 			end repeat
@@ -90,7 +98,13 @@ if application "Google Chrome" is running then
 			repeat with ti from 1 to count of tabs of w
 				try
 					set t to tab ti of w
-					set rowJSON to my tab_json("Google Chrome", wid, wi, ti, URL of t, title of t, ti is selectedIndex)
+					set mediaMetadata to "{}"
+					if my is_youtube_video(URL of t) then
+						try
+							set mediaMetadata to execute t javascript youtubeMetadataScript
+						end try
+					end if
+					set rowJSON to my tab_json("Google Chrome", wid, wi, ti, URL of t, title of t, ti is selectedIndex, mediaMetadata)
 					if rowJSON is not "" then set end of entries to rowJSON
 				end try
 			end repeat
