@@ -564,6 +564,16 @@ with timeout of 5 seconds
         set trackAlbum to album of current track
         set trackGenre to genre of current track
         try
+            set trackLyrics to lyrics of current track
+        on error
+            set trackLyrics to ""
+        end try
+        try
+            set trackSynopsis to description of current track
+        on error
+            set trackSynopsis to ""
+        end try
+        try
             set trackYear to year of current track
         on error
             set trackYear to 0
@@ -575,12 +585,16 @@ with timeout of 5 seconds
     set trackArtist to escape_text(trackArtist)
     set trackAlbum to escape_text(trackAlbum)
     set trackGenre to escape_text(trackGenre)
+    set trackLyrics to escape_text(trackLyrics)
+    set trackSynopsis to escape_text(trackSynopsis)
     set json to "{"
     set json to json & Q & "playing" & Q & ": true,"
     set json to json & Q & "track" & Q & ": " & Q & trackName & Q & ","
     set json to json & Q & "artist" & Q & ": " & Q & trackArtist & Q & ","
     set json to json & Q & "album" & Q & ": " & Q & trackAlbum & Q & ","
     set json to json & Q & "genre" & Q & ": " & Q & trackGenre & Q & ","
+    set json to json & Q & "lyrics" & Q & ": " & Q & trackLyrics & Q & ","
+    set json to json & Q & "synopsis" & Q & ": " & Q & trackSynopsis & Q & ","
     set json to json & Q & "year" & Q & ": " & trackYear & ","
     set json to json & Q & "duration" & Q & ": " & trackDuration & ","
     set json to json & Q & "position" & Q & ": " & trackPosition
@@ -598,7 +612,7 @@ EOF
 parse_music_json() {
     local json="$1" row
     local parsed_playing parsed_track parsed_artist parsed_album
-    local parsed_genre parsed_year parsed_duration parsed_position
+    local parsed_genre parsed_year parsed_lyrics parsed_synopsis parsed_duration parsed_position
     row=$(
         jq -r '
             [
@@ -608,23 +622,26 @@ parse_music_json() {
                 (.album // ""),
                 (.genre // ""),
                 (.year // ""),
+                (.lyrics // ""),
+                (.synopsis // .description // ""),
                 ((.duration // 0) | tonumber? // 0 | floor),
                 ((.position // 0) | tonumber? // 0 | floor)
             ]
             | map(tostring | gsub("[\r\n]"; " ") | gsub("\u001f"; " "))
             | join("\u001f")
         ' <<< "$json" 2>/dev/null
-    ) || row=$'false\x1f\x1f\x1f\x1f\x1f\x1f0\x1f0'
-    IFS=$'\x1f' read -r parsed_playing parsed_track parsed_artist parsed_album parsed_genre parsed_year parsed_duration parsed_position <<< "$row"
+    ) || row=$'false\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f0\x1f0'
+    IFS=$'\x1f' read -r parsed_playing parsed_track parsed_artist parsed_album parsed_genre parsed_year parsed_lyrics parsed_synopsis parsed_duration parsed_position <<< "$row"
     music_playing="$parsed_playing"; normalize_bools music_playing
     if [[ "$music_playing" == "true" ]]; then
         media_source="music"
         track="$parsed_track"; artist="$parsed_artist"; album="$parsed_album"; genre="$parsed_genre"
         year="$parsed_year"; duration_sec="$parsed_duration"; currentTime="$parsed_position"
-        # Browser/VLC descriptive metadata must never leak into the next Music
-        # track. Music-specific notes or lyrics can populate this deliberately
-        # later; until then the controller renders its track-details fallback.
-        summary=""; description=""; view_count=""; published_date=""; subscriber_count=""
+        # Music supplies its own lyrics and synopsis. Keeping these in the
+        # existing description/summary fields lets every client use the same
+        # metadata schema without leaking stale browser or VLC text.
+        summary="$parsed_synopsis"; description="$parsed_lyrics"
+        view_count=""; published_date=""; subscriber_count=""
         url=""; video_id=""; playlist_name=""
         normalize_ints duration_sec currentTime
     fi
