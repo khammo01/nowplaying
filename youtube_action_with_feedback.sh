@@ -6,6 +6,43 @@ root="${0:A:h}"
 click_sound="$root/assets/youtube-click.wav"
 error_sound="/System/Library/Sounds/Basso.aiff"
 
+show_rejection() {
+  local detail="$1"
+  local computer_name btt_base hud_config hud_action
+  computer_name=$(/usr/sbin/scutil --get ComputerName 2>/dev/null || /bin/hostname -s)
+  if [[ "${computer_name:l}" == *"mac mini"* || "${computer_name:l}" == *"mac-mini"* ]]; then
+    btt_base="http://192.168.1.26:51520"
+  elif [[ "${computer_name:l}" == *"macbook"* || "${computer_name:l}" == *"work mac"* ]]; then
+    btt_base="http://192.168.1.179:51520"
+  else
+    local local_ip
+    local_ip="$(/usr/sbin/ipconfig getifaddr en0 2>/dev/null || true)"
+    [[ -z "$local_ip" ]] && local_ip="$(/usr/sbin/ipconfig getifaddr en1 2>/dev/null || true)"
+    btt_base="http://${local_ip}:51520"
+  fi
+  hud_config=$(/usr/bin/jq -nc --arg detail "$detail" '{
+    BTTActionHUDTitle:"Next YouTube canceled",
+    BTTActionHUDDetail:$detail,
+    BTTActionHUDDuration:3,
+    BTTActionHUDWidth:420,
+    BTTActionHUDHeight:170,
+    BTTActionHUDPosition:0,
+    BTTActionHUDBlur:true,
+    BTTActionHUDBackground:"rgba(0.08,0.08,0.09,0.92)",
+    BTTActionHUDBorderWidth:1,
+    BTTActionHUDCloseOnClick:1,
+    BTTActionHUDHideWhenOtherHUDAppears:true
+  } | tojson')
+  hud_action=$(/usr/bin/jq -nc --arg config "$hud_config" '{
+    BTTPredefinedActionType:254,
+    BTTPredefinedActionName:"Show HUD Overlay",
+    BTTHUDActionConfiguration:$config
+  }')
+  if ! /usr/bin/curl -fsS --max-time 2 -G --data-urlencode "json=$hud_action" "$btt_base/trigger_action/" >/dev/null 2>&1; then
+    /usr/bin/osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "Next YouTube canceled"' -e 'end run' "$detail" >/dev/null 2>&1 || true
+  fi
+}
+
 case "$action" in
   next)     working="Switching to the next YouTube video" ;;
   home)     working="Opening YouTube Home" ;;
@@ -31,9 +68,11 @@ wait "$worker"
 exit_code=$?
 result="$(cat /tmp/nagbot-youtube-action-result 2>/dev/null)"
 
-if (( exit_code != 0 )) || [[ "$result" == ERROR\|* ]] || [[ "$result" == *"did not start"* ]] || [[ "$result" == *"No current"* ]]; then
+if (( exit_code != 0 )) || [[ "$result" == ERROR\|* ]] || [[ "$result" == REJECT\|* ]] || [[ "$result" == *"did not start"* ]] || [[ "$result" == *"No current"* ]]; then
   detail="${result#ERROR|}"
+  detail="${detail#REJECT|}"
   [[ -z "$detail" ]] && detail="YouTube could not complete the request"
+  show_rejection "$detail"
   /usr/bin/afplay "$error_sound" >/dev/null 2>&1 &
   exit 1
 fi

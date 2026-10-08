@@ -53,7 +53,7 @@ on tab_json(browserName, windowID, windowIndex, tabIndex, tabURL, tabTitle, sele
 	return "{\"browser\":\"" & browserName & "\",\"window_id\":" & windowID & ",\"window_index\":" & windowIndex & ",\"tab_index\":" & tabIndex & ",\"url\":\"" & my escape_json(tabURL) & "\",\"title\":\"" & my escape_json(tabTitle) & "\",\"selected\":" & selectedTab & ",\"is_youtube_page\":" & youtubePage & ",\"is_youtube_video\":" & youtubeVideo & ",\"is_media_page\":" & mediaPage & ",\"media_metadata\":" & mediaMetadata & "}"
 end tab_json
 
-set youtubeMetadataScript to "(()=>{const d=window.ytInitialPlayerResponse?.videoDetails||{};const v=document.querySelector('video');const a=(document.querySelector('#owner #channel-name a,ytd-channel-name a,#channel-name a')?.textContent||d.author||'').trim();const n=Number(v?.duration||d.lengthSeconds||0);return JSON.stringify({author:a,duration_sec:Number.isFinite(n)?Math.round(n):0})})()"
+set youtubeMetadataScript to "(()=>{const d=window.ytInitialPlayerResponse?.videoDetails||{};const v=document.querySelector('video');const a=(document.querySelector('#owner #channel-name a,ytd-channel-name a,#channel-name a')?.textContent||d.author||'').trim();const n=Number(v?.duration||d.lengthSeconds||0);const playing=!!v&&!v.paused&&!v.ended&&v.readyState>=2;const paused=!!v&&v.paused&&!v.ended&&v.currentTime>0;const last=window.__nagmenuPlayback;const lastPlayback=last&&last.url===location.href?Number(last.at)||0:0;return JSON.stringify({author:a,duration_sec:Number.isFinite(n)?Math.round(n):0,playing,paused,last_playback_at_ms:lastPlayback})})()"
 
 set entries to {}
 

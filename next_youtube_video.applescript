@@ -108,11 +108,11 @@ end try_frontmost_completed_advance
 on try_cached_advance()
  try
 	set inventoryPath to (POSIX path of (path to home folder)) & "NowPlaying/cache/browser-inventory.json"
-  -- Reject an old inventory. URL validation protects identity, while this age
-  -- bound prevents a newly opened queue from being omitted for too long.
-  set expectedURL to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 120) | select(.active.browser==\"Safari\") | .active.url // empty' " & quoted form of inventoryPath
-  if expectedURL does not contain "youtube.com/watch" and expectedURL does not contain "youtube.com/shorts/" then return ""
-  set queueText to do shell script "/usr/bin/jq -r '.tabs[] | select(.browser==\"Safari\" and .is_youtube_video==true) | [.window_id,.tab_index,.url] | @tsv' " & quoted form of inventoryPath
+  -- The inventory refreshes every 8-30 seconds. A recent paused tab remains a
+  -- valid source for five minutes, but only while the complete live queue still
+  -- matches this snapshot below.
+  set activeURL to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 120) | select(.active.browser==\"Safari\") | .active.url // empty' " & quoted form of inventoryPath
+  set queueText to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 90) | .tabs[] | select(.browser==\"Safari\" and .is_youtube_video==true) | [.window_id,.tab_index,.url,(.media_metadata.playing//false),(.media_metadata.paused//false),(.media_metadata.last_playback_at_ms//0),(((.media_metadata.last_playback_at_ms//0)>0) and ((now*1000-(.media_metadata.last_playback_at_ms//0))<=300000))] | @tsv' " & quoted form of inventoryPath
   if queueText is "" then return ""
  on error
   return ""
@@ -122,6 +122,10 @@ on try_cached_advance()
   if not running then return ""
   set candidates to {}
   set sourcePosition to 0
+  set bestRank to 0
+  set bestTime to 0
+  set bestSelected to false
+  set hasRecentPaused to false
   set oldDelimiters to AppleScript's text item delimiters
   set AppleScript's text item delimiters to linefeed
   set queueLines to text items of queueText
@@ -130,20 +134,56 @@ on try_cached_advance()
    set AppleScript's text item delimiters to tab
    set queueFields to text items of (queueLine as text)
    set AppleScript's text item delimiters to oldDelimiters
-   if (count of queueFields) ≥ 3 then
+   if (count of queueFields) ≥ 7 then
     try
      set wid to item 1 of queueFields as integer
      set ti to item 2 of queueFields as integer
      set tabURL to item 3 of queueFields
+     set cachedPlaying to item 4 of queueFields is "true"
+     set cachedPaused to item 5 of queueFields is "true"
+     set lastPlayback to item 6 of queueFields as real
+     set recentlyPlayed to item 7 of queueFields is "true"
+     if cachedPaused and recentlyPlayed then set hasRecentPaused to true
      -- Validate every cached identity before it can become a source or target.
      if URL of tab ti of window id wid is tabURL then
       set end of candidates to {wid, ti, tabURL}
-      if tabURL is expectedURL and sourcePosition is 0 then set sourcePosition to count of candidates
+      set selectedTab to (index of current tab of window id wid = ti)
+      set rankValue to 0
+      if cachedPlaying then
+       set rankValue to 3
+      else if cachedPaused and recentlyPlayed then
+       set rankValue to 2
+      else if tabURL is activeURL then
+       set rankValue to 1
+      end if
+      if rankValue > 0 and my prefer_candidate(rankValue, lastPlayback, selectedTab, bestRank, bestTime, bestSelected) then
+       set bestRank to rankValue
+       set bestTime to lastPlayback
+       set bestSelected to selectedTab
+       set sourcePosition to count of candidates
+      end if
      end if
     end try
    end if
   end repeat
-  if sourcePosition is 0 then return ""
+  -- Cached identities are already validated above. Equal cardinality proves
+  -- there are no extra, removed, moved, or replaced live YouTube tabs.
+  set liveYouTubeCount to 0
+  repeat with w in windows
+   repeat with ti from 1 to count of tabs of w
+    try
+     if my is_youtube_video_url(URL of tab ti of w) then set liveYouTubeCount to liveYouTubeCount + 1
+    end try
+   end repeat
+  end repeat
+  if liveYouTubeCount is not (count of candidates) then
+   if hasRecentPaused and bestRank < 3 then return "REJECT|Next YouTube canceled: the YouTube tab queue changed"
+   return ""
+  end if
+  if sourcePosition is 0 then
+   if hasRecentPaused then return "REJECT|Next YouTube canceled: the recently paused tab could not be verified"
+   return ""
+  end if
  end tell
  return my advance_queue(candidates, sourcePosition)
 end try_cached_advance
