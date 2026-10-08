@@ -1,5 +1,8 @@
 -- Close the playing/last-played YouTube tab, then select the next queued video.
 -- Window IDs survive front-window reordering; tab indexes are adjusted after close.
+set completedResult to my try_frontmost_completed_advance()
+if completedResult is not "" then return completedResult
+
 set cachedResult to my try_cached_advance()
 if cachedResult is not "" then return cachedResult
 
@@ -52,32 +55,52 @@ tell application "Safari"
  end repeat
  if (count of candidates) = 0 then return my open_youtube_home()
  if sourcePosition = 0 then return "No current YouTube video found"
- set {sourceWindow, sourceTab, sourceURL} to item sourcePosition of candidates
- -- Verify identity immediately before closing; never use a stale front window.
- if URL of tab sourceTab of window id sourceWindow is not sourceURL then return "Source changed; skipped"
- close tab sourceTab of window id sourceWindow
- if (count of candidates) < 2 then return my open_youtube_home()
- set {targetWindow, targetTab, targetURL} to my next_destination(candidates, sourcePosition)
- if URL of tab targetTab of window id targetWindow is not targetURL then return "Destination changed; skipped"
- set current tab of window id targetWindow to tab targetTab of window id targetWindow
- set index of window id targetWindow to 1
- activate
- do JavaScript "(() => {const v=document.querySelector('video'); if(v){if(document.activeElement)document.activeElement.blur(); v.setAttribute('tabindex','-1'); v.focus(); if(v.ended)v.currentTime=0; v.play().catch(()=>{});}})()" in tab targetTab of window id targetWindow
- -- Wait for this destination to play before sending the fullscreen shortcut.
- repeat 30 times
-  delay 0.1
-  if URL of current tab of front window is not targetURL or id of front window is not targetWindow then return "Selection changed; skipped fullscreen"
-  set playbackState to do JavaScript "(() => {const v=document.querySelector('video'); return v&&!v.paused&&!v.ended ? (document.fullscreenElement||v.webkitDisplayingFullscreen?'fullscreen':'playing') : 'waiting';})()" in current tab of front window
-  if playbackState = "fullscreen" then return "Advanced to next YouTube video"
-  if playbackState = "playing" then
-   tell application "System Events"
-    if frontmost of application process "Safari" then keystroke "f"
-   end tell
-   return "Advanced to next YouTube video"
-  end if
- end repeat
- return "Selected next YouTube video; playback did not start"
 end tell
+return my advance_queue(candidates, sourcePosition)
+
+-- A finished video is commonly absent from the active-player cache. Prefer the
+-- selected tab in Safari's front window when its player is ended or effectively
+-- at 100%, close that exact tab, and advance through the live YouTube queue.
+on try_frontmost_completed_advance()
+ if application "Safari" is not running then return ""
+ set completionProbeJS to "(() => {" & linefeed & ¬
+	" const host=location.hostname.toLowerCase();" & linefeed & ¬
+	" if(!/(^|\\.)youtube\\.com$/.test(host) || !/^\\/(watch|shorts)(\\/|$)/.test(location.pathname)) return false;" & linefeed & ¬
+	" const v=Array.from(document.querySelectorAll('video')).find(x=>Number.isFinite(x.duration)&&x.duration>0) || document.querySelector('video');" & linefeed & ¬
+	" if(!v) return !!document.querySelector('.html5-video-player.ended-mode');" & linefeed & ¬
+	" const remaining=Number.isFinite(v.duration)?v.duration-v.currentTime:Infinity;" & linefeed & ¬
+	" return !!(v.ended || remaining<=1.5 || (v.duration>0&&v.currentTime/v.duration>=0.999) || document.querySelector('.html5-video-player.ended-mode'));" & linefeed & ¬
+	"})()"
+
+ tell application "Safari"
+  if (count of windows) = 0 then return ""
+  set sourceWindow to id of front window
+  set sourceTab to index of current tab of front window
+  set sourceURL to URL of current tab of front window
+  try
+   if not (do JavaScript completionProbeJS in current tab of front window) then return ""
+  on error
+   return ""
+  end try
+
+  set candidates to {}
+  set sourcePosition to 0
+  repeat with w in windows
+   set wid to id of w
+   repeat with ti from 1 to count of tabs of w
+    try
+     set tabURL to URL of tab ti of w
+     if my is_youtube_video_url(tabURL) then
+      set end of candidates to {wid, ti, tabURL}
+      if wid = sourceWindow and ti = sourceTab then set sourcePosition to count of candidates
+     end if
+    end try
+   end repeat
+  end repeat
+  if sourcePosition = 0 then return ""
+ end tell
+ return my advance_queue(candidates, sourcePosition)
+end try_frontmost_completed_advance
 
 -- Fast path: NowPlaying already records the exact browser, tab index, and URL.
 -- Resolve that stable URL, enumerate only YouTube URLs (no per-tab JavaScript),
@@ -121,12 +144,18 @@ on try_cached_advance()
    end if
   end repeat
   if sourcePosition is 0 then return ""
-  if (count of candidates) < 2 then return my open_youtube_home()
+ end tell
+ return my advance_queue(candidates, sourcePosition)
+end try_cached_advance
+
+on advance_queue(candidates, sourcePosition)
+ tell application "Safari"
   set {sourceWindow, sourceTab, sourceURL} to item sourcePosition of candidates
-  if URL of tab sourceTab of window id sourceWindow is not sourceURL then return ""
+  if URL of tab sourceTab of window id sourceWindow is not sourceURL then return "Source changed; skipped"
   close tab sourceTab of window id sourceWindow
+  if (count of candidates) < 2 then return my open_youtube_home()
   set {targetWindow, targetTab, targetURL} to my next_destination(candidates, sourcePosition)
-  if URL of tab targetTab of window id targetWindow is not targetURL then return ""
+  if URL of tab targetTab of window id targetWindow is not targetURL then return "Destination changed; skipped"
   set current tab of window id targetWindow to tab targetTab of window id targetWindow
   set index of window id targetWindow to 1
   activate
@@ -145,7 +174,7 @@ on try_cached_advance()
   end repeat
   return "Selected next YouTube video; playback did not start"
  end tell
-end try_cached_advance
+end advance_queue
 
 -- No queued video remains: open the home page without toggling fullscreen.
 on open_youtube_home()
@@ -160,6 +189,10 @@ end open_youtube_home
 on prefer_candidate(rankValue, lastTime, selectedTab, bestRank, bestTime, bestSelected)
  return rankValue > bestRank or (rankValue = bestRank and lastTime > bestTime) or (rankValue = bestRank and lastTime = bestTime and selectedTab and not bestSelected)
 end prefer_candidate
+
+on is_youtube_video_url(tabURL)
+ return tabURL starts with "https://www.youtube.com/watch" or tabURL starts with "https://www.youtube.com/shorts/" or tabURL starts with "https://youtube.com/watch" or tabURL starts with "https://youtube.com/shorts/" or tabURL starts with "https://m.youtube.com/watch" or tabURL starts with "https://m.youtube.com/shorts/"
+end is_youtube_video_url
 
 on next_destination(candidates, sourcePosition)
  set {sourceWindow, sourceTab, sourceURL} to item sourcePosition of candidates

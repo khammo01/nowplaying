@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 source = (ROOT / 'next_youtube_video.applescript').read_text()
 assignment = source.split('set probeJS to ', 1)[1].split('\n\n', 1)[0]
 probe = '\n'.join(json.loads(c) for c in re.findall(r'"(?:\\.|[^"\\])*"', assignment))
+completion_assignment = source.split('set completionProbeJS to ', 1)[1].split('\n\n', 1)[0]
+completion_probe = '\n'.join(json.loads(c) for c in re.findall(r'"(?:\\.|[^"\\])*"', completion_assignment))
 cases = r'''
 var location={hostname:'www.youtube.com',pathname:'/watch',href:'https://www.youtube.com/watch?v=a'};
 var window={}, videos=[];
@@ -25,6 +27,22 @@ location.hostname='youtube.com.evil.example';expect('0|0');
 location.hostname='www.youtube.com';location.pathname='/';expect('0|0');
 location.pathname='/shorts/abc';expect('3|0');
 console.log('Passed '+checks+' next-video probe checks.');
+'''
+completion_cases = r'''
+{
+var location={hostname:'www.youtube.com',pathname:'/watch',href:'https://www.youtube.com/watch?v=a'};
+var playerEnded=false;
+var video={paused:true,ended:false,currentTime:98,duration:100};
+var document={querySelectorAll:()=>[video],querySelector:(value)=>value==='video'?video:(playerEnded?{}:null)};
+let checks=0;
+function expect(value){const actual=eval(completionProbe);if(actual!==value)throw Error(actual+' != '+value);checks++;}
+expect(false);
+video.currentTime=99.91;expect(true);
+video.currentTime=98;video.ended=true;expect(true);
+video.ended=false;playerEnded=true;expect(true);
+location.pathname='/';expect(false);
+console.log('Passed '+checks+' completed-video checks.');
+}
 '''
 helpers = source[source.index('on prefer_candidate('):]
 harness = '''
@@ -43,7 +61,7 @@ end run
 '''
 with tempfile.TemporaryDirectory() as temp:
     js = Path(temp) / 'next.js'
-    js.write_text('const probe='+json.dumps(probe)+';\n'+cases)
+    js.write_text('const probe='+json.dumps(probe)+';\nconst completionProbe='+json.dumps(completion_probe)+';\n'+cases+completion_cases)
     subprocess.run(['osascript', '-l', 'JavaScript', str(js)], check=True)
     applescript = Path(temp) / 'selection.applescript'
     applescript.write_text(helpers+harness)
