@@ -60,11 +60,47 @@ on cached_target()
 	return {}
 end cached_target
 
-on pause_music()
+on pause_competing_media()
+	-- Starting a selected YouTube video is an intentional source switch. Pause
+	-- every currently playing browser media element first, including media on
+	-- non-YouTube sites, so a cached/queued launch cannot create two audio
+	-- streams. The chosen target is played again immediately afterward.
+	set pauseJS to "(() => {let count=0;for(const media of document.querySelectorAll('video,audio')){if(!media.paused&&!media.ended){media.pause();count++;}}return String(count);})()"
+	if application "Safari" is running then
+		tell application "Safari"
+			repeat with candidateWindow in windows
+				repeat with candidateTab in tabs of candidateWindow
+					try
+						set tabURL to URL of candidateTab as text
+						if tabURL does not contain "homeassistant" and tabURL does not contain ":8123" then do JavaScript pauseJS in candidateTab
+					end try
+				end repeat
+			end repeat
+		end tell
+	end if
+	if application "Google Chrome" is running then
+		tell application "Google Chrome"
+			repeat with candidateWindow in windows
+				repeat with candidateTab in tabs of candidateWindow
+					try
+						set tabURL to URL of candidateTab as text
+						if tabURL does not contain "homeassistant" and tabURL does not contain ":8123" then execute candidateTab javascript pauseJS
+					end try
+				end repeat
+			end repeat
+		end tell
+	end if
 	try
 		tell application "Music" to if player state is playing then pause
 	end try
-end pause_music
+	if application "VLC" is running then
+		tell application "VLC"
+			try
+				if playing then pause
+			end try
+		end tell
+	end if
+end pause_competing_media
 
 on play_target(browserName, windowIndex, tabIndex, expectedURL)
 	set playJS to "(() => {const v=[...document.querySelectorAll('video')].find(x=>x.readyState>=2)||document.querySelector('video');if(!v)return 'ERROR|Video is not ready';if(v.ended)v.currentTime=0;v.play().catch(()=>{});return 'OK|'+(document.title||'YouTube');})()"
@@ -85,7 +121,7 @@ on play_target(browserName, windowIndex, tabIndex, expectedURL)
 				set current tab of w to t
 				set index of w to 1
 				activate
-				my pause_music()
+				my pause_competing_media()
 				return do JavaScript playJS in t
 			end tell
 		else if browserName is "Google Chrome" then
@@ -104,7 +140,7 @@ on play_target(browserName, windowIndex, tabIndex, expectedURL)
 				set active tab index of w to tabIndex
 				set index of w to 1
 				activate
-				my pause_music()
+				my pause_competing_media()
 				return execute t javascript playJS
 			end tell
 		end if
@@ -326,7 +362,7 @@ on surprise_me()
 					set destination to do JavaScript recommendationJS in t
 					if destination is not "" then
 						set URL of t to destination
-						my pause_music()
+						my pause_competing_media()
 						repeat 24 times
 							delay 0.25
 							set playResult to do JavaScript "(() => {const v=document.querySelector('video');if(!v)return '';v.play().catch(()=>{});return 'OK|'+(document.title||'YouTube surprise');})()" in t
