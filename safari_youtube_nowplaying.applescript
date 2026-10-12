@@ -70,15 +70,37 @@ end clear_nowplaying_cache
 -- Reject ordinary web pages before asking Safari or Chrome to execute
 -- JavaScript in them. With many open tabs, crossing the app boundary for
 -- every page was the dominant cost of each NowPlaying poll.
+on hostname_from_url(theURL)
+	set schemeParts to my split_text(theURL as string, "://")
+	if (count of schemeParts) < 2 then return ""
+	set authorityParts to my split_text(item 2 of schemeParts, "/")
+	if (count of authorityParts) = 0 then return ""
+	set hostParts to my split_text(item 1 of authorityParts, "@")
+	set hostAndPort to item -1 of hostParts
+	set portParts to my split_text(hostAndPort, ":")
+	return item 1 of portParts
+end hostname_from_url
+
+on split_text(s, delimiterText)
+	set oldTID to AppleScript's text item delimiters
+	set AppleScript's text item delimiters to delimiterText
+	set parts to text items of s
+	set AppleScript's text item delimiters to oldTID
+	return parts
+end split_text
+
 on is_media_url(theURL)
 	if theURL is missing value then return false
 	set u to theURL as string
+	set parsedHost to my hostname_from_url(u)
+	if parsedHost is "" then return false
 	-- A YouTube home/search page may contain autoplaying previews, but it is not
 	-- a controllable now-playing target. Only real video routes qualify.
-	if u contains "youtube.com" and not (u contains "youtube.com/watch" or u contains "youtube.com/shorts/") then return false
+	if (parsedHost is "youtube.com" or parsedHost ends with ".youtube.com") and not (u contains "/watch" or u contains "/shorts/") then return false
 	set mediaHosts to {"youtube.com", "youtu.be", "netflix.com", "hulu.com", "disneyplus.com", "max.com", "hbomax.com", "primevideo.com", "tv.apple.com", "peacocktv.com", "paramountplus.com", "twitch.tv", "vimeo.com", "dailymotion.com", "crunchyroll.com", "tubi.tv", "pluto.tv", "spotify.com", "music.apple.com", "music.amazon.com", "soundcloud.com", "pandora.com", "tidal.com", "deezer.com", "bandcamp.com", "app.plex.tv"}
 	repeat with mediaHost in mediaHosts
-		if u contains (mediaHost as string) then return true
+		set allowedHost to mediaHost as string
+		if parsedHost is allowedHost or parsedHost ends with "." & allowedHost then return true
 	end repeat
 	return false
 end is_media_url

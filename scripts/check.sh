@@ -8,6 +8,7 @@ for name in safari_youtube_nowplaying VLC_nowplaying open_youtube_window next_yo
     osacompile -o "$TMP_CHECK/$name.scpt" "$ROOT/$name.applescript"
 done
 python3 "$ROOT/tests/check_playback.py"
+python3 "$ROOT/tests/check_applescript_media_hosts.py"
 python3 "$ROOT/tests/check_shell.py"
 python3 "$ROOT/tests/check_lock.py"
 python3 "$ROOT/tests/check_next_youtube.py"

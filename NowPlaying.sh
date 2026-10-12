@@ -741,6 +741,18 @@ parse_media_remote_json() {
 }
 apply_media_remote_defaults() {
     [[ "$media_remote_playing" == "true" ]] || return
+
+    # Safari and Chrome expose every HTML media element through macOS
+    # MediaRemote, including autoplaying product clips on ordinary shopping
+    # pages. Browser MediaRemote data may supplement a tab that the dedicated
+    # browser probe has accepted, but it must never promote an unapproved page
+    # into active/paused NowPlaying state on its own.
+    if [[ "$btt_media_source" == "browser" && "$youtube_playing" != "true" ]]; then
+        debugecho "DEBUG Ignoring unverified browser MediaRemote item: ${btt_track:-unknown}"
+        media_remote_playing="false"
+        return
+    fi
+
     if [[ "$music_playing" == "true" || "$youtube_playing" == "true" ]]; then
         case "$media_source:$btt_media_source" in
             music:music|youtube:browser|vlc:vlc) ;;
