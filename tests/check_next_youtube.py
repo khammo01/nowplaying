@@ -7,10 +7,16 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 source = (ROOT / 'next_youtube_video.applescript').read_text()
+control_source = (ROOT / 'youtube_control.applescript').read_text()
 wrapper = (ROOT / 'youtube_action_with_feedback.sh').read_text()
 assert 'cache/next-youtube.lock' in wrapper, 'Next action must prevent overlapping workers'
 assert 'find_playing_youtube_tab' in source, 'Next action must adopt Safari autoplay handoff'
 assert source.index('find_playing_youtube_tab()') < source.index('v.play().catch'), 'Autoplay handoff must be checked before requesting play'
+assert "player.pauseVideo()" in control_source, 'Queued launches must explicitly pause YouTube players'
+assert "media.webkitExitFullscreen()" in control_source, 'Queued launches must exit native video fullscreen'
+play_target = control_source[control_source.index('on play_target('):control_source.index('end play_target')]
+assert play_target.index('my pause_competing_media()') < play_target.index('set current tab of w to t'), 'Competing media must pause before selecting a queued Safari tab'
+assert play_target.index('my pause_competing_media()') < play_target.index('set active tab index of w to index of t'), 'Competing media must pause before selecting a queued Chrome tab'
 assignment = source.split('set probeJS to ', 1)[1].split('\n\n', 1)[0]
 probe = '\n'.join(json.loads(c) for c in re.findall(r'"(?:\\.|[^"\\])*"', assignment))
 completion_assignment = source.split('set completionProbeJS to ', 1)[1].split('\n\n', 1)[0]

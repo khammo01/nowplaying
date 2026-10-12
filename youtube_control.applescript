@@ -64,8 +64,11 @@ on pause_competing_media()
 	-- Starting a selected YouTube video is an intentional source switch. Pause
 	-- every currently playing browser media element first, including media on
 	-- non-YouTube sites, so a cached/queued launch cannot create two audio
-	-- streams. The chosen target is played again immediately afterward.
-	set pauseJS to "(() => {let count=0;for(const media of document.querySelectorAll('video,audio')){if(!media.paused&&!media.ended){media.pause();count++;}}return String(count);})()"
+	-- streams. Pause YouTube through its player API as well as the HTML media
+	-- element because Safari's native fullscreen presentation can otherwise
+	-- survive a tab switch. Leave fullscreen before activating the destination.
+	-- The chosen target is played again immediately afterward.
+	set pauseJS to "(() => {let count=0;const player=document.getElementById('movie_player');try{if(player&&typeof player.getPlayerState==='function'&&player.getPlayerState()===1&&typeof player.pauseVideo==='function'){player.pauseVideo();count++;}}catch(e){}for(const media of document.querySelectorAll('video,audio')){try{if(!media.paused&&!media.ended){media.pause();count++;}if(media.webkitDisplayingFullscreen&&typeof media.webkitExitFullscreen==='function')media.webkitExitFullscreen();}catch(e){}}try{if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});else if(document.webkitFullscreenElement&&document.webkitExitFullscreen)document.webkitExitFullscreen();}catch(e){}return String(count);})()"
 	if application "Safari" is running then
 		tell application "Safari"
 			repeat with candidateWindow in windows
@@ -105,6 +108,10 @@ end pause_competing_media
 on play_target(browserName, windowIndex, tabIndex, expectedURL)
 	set playJS to "(() => {const v=[...document.querySelectorAll('video')].find(x=>x.readyState>=2)||document.querySelector('video');if(!v)return 'ERROR|Video is not ready';if(v.ended)v.currentTime=0;v.play().catch(()=>{});return 'OK|'+(document.title||'YouTube');})()"
 	try
+		-- Pause the source while its fullscreen/tab context is still intact. Doing
+		-- this after selecting the destination can leave the old Safari fullscreen
+		-- player running behind the newly selected video.
+		my pause_competing_media()
 		if browserName is "Safari" then
 			tell application "Safari"
 				set w to window windowIndex
@@ -121,7 +128,6 @@ on play_target(browserName, windowIndex, tabIndex, expectedURL)
 				set current tab of w to t
 				set index of w to 1
 				activate
-				my pause_competing_media()
 				return do JavaScript playJS in t
 			end tell
 		else if browserName is "Google Chrome" then
@@ -137,10 +143,9 @@ on play_target(browserName, windowIndex, tabIndex, expectedURL)
 				end if
 				if expectedURL is not "" and URL of t is not expectedURL then return "ERROR|The saved YouTube tab moved"
 				if not my is_youtube_video(URL of t) then return "ERROR|The saved YouTube tab is gone"
-				set active tab index of w to tabIndex
+				set active tab index of w to index of t
 				set index of w to 1
 				activate
-				my pause_competing_media()
 				return execute t javascript playJS
 			end tell
 		end if
