@@ -7,6 +7,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 source = (ROOT / 'next_youtube_video.applescript').read_text()
+wrapper = (ROOT / 'youtube_action_with_feedback.sh').read_text()
+assert 'cache/next-youtube.lock' in wrapper, 'Next action must prevent overlapping workers'
+assert 'find_playing_youtube_tab' in source, 'Next action must adopt Safari autoplay handoff'
+assert source.index('find_playing_youtube_tab()') < source.index('v.play().catch'), 'Autoplay handoff must be checked before requesting play'
 assignment = source.split('set probeJS to ', 1)[1].split('\n\n', 1)[0]
 probe = '\n'.join(json.loads(c) for c in re.findall(r'"(?:\\.|[^"\\])*"', assignment))
 completion_assignment = source.split('set completionProbeJS to ', 1)[1].split('\n\n', 1)[0]

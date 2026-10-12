@@ -195,11 +195,29 @@ on advance_queue(candidates, sourcePosition)
   close tab sourceTab of window id sourceWindow
   if (count of candidates) < 2 then return my open_youtube_home()
   set {targetWindow, targetTab, targetURL} to my next_destination(candidates, sourcePosition)
-  if URL of tab targetTab of window id targetWindow is not targetURL then return "Destination changed; skipped"
+
+  -- Closing a tab or its last window can make Safari reveal and autoplay a
+  -- different queued video. Give that handoff time to settle before issuing
+  -- play() ourselves; otherwise both Safari's choice and ours can play.
+  set handedOffDestination to {}
+  repeat 10 times
+   delay 0.1
+   set handedOffDestination to my find_playing_youtube_tab()
+   if (count of handedOffDestination) = 3 then exit repeat
+  end repeat
+
+  if (count of handedOffDestination) = 3 then
+   set {targetWindow, targetTab, targetURL} to handedOffDestination
+  else
+   if URL of tab targetTab of window id targetWindow is not targetURL then return "Destination changed; skipped"
+   set current tab of window id targetWindow to tab targetTab of window id targetWindow
+   set index of window id targetWindow to 1
+   activate
+   do JavaScript "(() => {const v=document.querySelector('video');if(v&&!(!v.paused&&!v.ended)){if(document.activeElement)document.activeElement.blur();v.setAttribute('tabindex','-1');v.focus();if(v.ended)v.currentTime=0;v.play().catch(()=>{});}})()" in tab targetTab of window id targetWindow
+  end if
   set current tab of window id targetWindow to tab targetTab of window id targetWindow
   set index of window id targetWindow to 1
   activate
-  do JavaScript "(() => {const v=document.querySelector('video');if(v){if(document.activeElement)document.activeElement.blur();v.setAttribute('tabindex','-1');v.focus();if(v.ended)v.currentTime=0;v.play().catch(()=>{});}})()" in tab targetTab of window id targetWindow
   repeat 30 times
    delay 0.1
    if URL of current tab of front window is not targetURL or id of front window is not targetWindow then return "Selection changed; skipped fullscreen"
@@ -215,6 +233,33 @@ on advance_queue(candidates, sourcePosition)
   return "Selected next YouTube video; playback did not start"
  end tell
 end advance_queue
+
+-- Return the currently selected playing YouTube tab when possible, otherwise
+-- the first playing YouTube tab. This is called only after the source closes.
+on find_playing_youtube_tab()
+ set fallbackDestination to {}
+ tell application "Safari"
+  if not running then return fallbackDestination
+  repeat with w in windows
+   set wid to id of w
+   repeat with ti from 1 to count of tabs of w
+    try
+     set t to tab ti of w
+     set tabURL to URL of t
+     if my is_youtube_video_url(tabURL) then
+      set isPlaying to do JavaScript "(() => {const v=document.querySelector('video');return !!(v&&!v.paused&&!v.ended&&v.readyState>=2);})()" in t
+      if isPlaying then
+       set destination to {wid, ti, tabURL}
+       if wid = id of front window and ti = index of current tab of front window then return destination
+       if (count of fallbackDestination) = 0 then set fallbackDestination to destination
+      end if
+     end if
+    end try
+   end repeat
+  end repeat
+ end tell
+ return fallbackDestination
+end find_playing_youtube_tab
 
 -- No queued video remains: open the home page without toggling fullscreen.
 on open_youtube_home()

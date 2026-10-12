@@ -36,5 +36,11 @@ opens when no YouTube video tabs exist or Safari is not running. If playback is 
 is skipped. This requires the existing Safari JavaScript and System Events
 Automation permissions.
 
+After the source closes, Safari may reveal a YouTube tab that autoplays by
+itself. The command waits briefly for that browser handoff and adopts the
+playing tab instead of starting a second queued tab. Concurrent Next commands
+are also collapsed into one active worker so repeated button presses cannot
+advance overlapping destinations.
+
 `./scripts/check.sh` compiles the script and tests playback classification,
 selection priority, index adjustment, and wraparound without closing live tabs.

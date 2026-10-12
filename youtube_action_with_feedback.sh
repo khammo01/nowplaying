@@ -6,6 +6,27 @@ root="${0:A:h}"
 click_sound="$root/assets/youtube-click.wav"
 error_sound="/System/Library/Sounds/Basso.aiff"
 
+# BTT launches this action asynchronously, so repeated button presses can
+# otherwise overlap and advance two tabs at once. Keep Next single-flight.
+if [[ "$action" == "next" ]]; then
+  lock_dir="$root/cache/next-youtube.lock"
+  /bin/mkdir -p "$root/cache"
+  if ! /bin/mkdir "$lock_dir" 2>/dev/null; then
+    lock_pid="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+    if [[ "$lock_pid" == <-> ]] && /bin/kill -0 "$lock_pid" 2>/dev/null; then
+      print -r -- "OK|Next YouTube is already in progress"
+      exit 0
+    fi
+    /bin/rmdir "$lock_dir" 2>/dev/null || {
+      print -r -- "OK|Next YouTube is already in progress"
+      exit 0
+    }
+    /bin/mkdir "$lock_dir" 2>/dev/null || exit 0
+  fi
+  print -r -- "$$" > "$lock_dir/pid"
+  trap '/bin/rm -f "$lock_dir/pid" 2>/dev/null; /bin/rmdir "$lock_dir" 2>/dev/null' EXIT INT TERM
+fi
+
 show_rejection() {
   local detail="$1"
   local computer_name btt_base hud_config hud_action
