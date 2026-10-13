@@ -40,7 +40,10 @@ while true; do
   elif [[ "$screen_off" == true ]]; then in_use=false; reason="screen off"
   fi
   nowplaying_running=false
-  if pgrep -f "$ROOT/NowPlaying.sh" >/dev/null 2>&1; then nowplaying_running=true; fi
+  nowplaying_pid=$(jq -r '.pid // 0' "$CACHE_ROOT/nowplaying.lock/lock.json" 2>/dev/null || printf 0)
+  if [[ "$nowplaying_pid" =~ ^[0-9]+$ ]] && (( nowplaying_pid > 0 )) && kill -0 "$nowplaying_pid" 2>/dev/null; then
+    nowplaying_running=true
+  fi
   nowplaying_version=$(git -C "$ROOT" describe --always --dirty 2>/dev/null || printf unknown)
   agent_version="$nowplaying_version"
   sent_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
