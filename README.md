@@ -16,6 +16,8 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 ## Files
 
 - `NowPlaying.sh`: polling, Music sensor, state normalization, artwork, Home Assistant output, terminal display.
+- `scripts/nagbot_computer_agent.sh`: independent one-second computer activity service. It runs detector plugins, publishes `nagbot_computer_agent_state`, and keeps media metadata separate from computer-use state.
+- `scripts/nca_plugins/session_state.sh`: session detector for lock state, display sleep, and HID idle time. NowPlaying reads the agent cache and suspends expensive media polling while the Mac is locked or its display is asleep.
 - `scripts/install_btt_fast_paths.py`: BTT media controls plus a native Now Playing
   state-change trigger. BTT watches `BTTNowPlayingInfoSequoia`; the trigger filters
   duplicate and metadata-only callbacks, then signals the running poller to refresh

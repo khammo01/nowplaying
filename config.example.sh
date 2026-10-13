@@ -4,6 +4,11 @@
 # An update is installed only after it passes this Mac's full validation suite.
 NOWPLAYING_AUTO_UPDATE_ENABLED=true
 NOWPLAYING_AUTO_UPDATE_INTERVAL=3600
+# NagBot Computer Agent: one-second local activity detection and a 30-second HA heartbeat.
+NCA_ACTIVITY_INTERVAL_SEC=1
+NCA_HEARTBEAT_SEC=30
+# Report ordinary input idle as an attribute; lock/display sleep determine in-use state.
+NCA_IDLE_THRESHOLD_SEC=300
 HA_SERVER="root@homeassistant.local"
 HA_BASE_URL="http://homeassistant.local:8123"
 HA_API_URL="http://homeassistant.local:8123/api/webhook/REPLACE_ME"

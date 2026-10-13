@@ -146,6 +146,9 @@ last_known_youtube_active="false"; last_music_artwork_hash=""; last_music_artwor
 last_ha_update_time_utc=""; last_ha_update_time_local="--:--:--.---"; last_emitted_state=""; last_idle_bucket=""
 current_idle_bucket=""; last_emitted_queue_signature=""; last_successful_ha_emit_epoch=0; force_emit_this_poll="false"
 artwork_version=""
+local_computer_active="true"; local_computer_locked="false"; local_display_asleep="false"; local_idle_seconds=0
+local_activity_reason="active"; last_local_computer_active=""; local_activity_changed="false"
+LOCAL_INACTIVE_CHECK_INTERVAL="${LOCAL_INACTIVE_CHECK_INTERVAL:-1}"
 
 
 # ============================================================
@@ -201,6 +204,39 @@ clock_now_ms() {
 }
 epoch_now() { date +%s; }
 cecho()     { printf '%b\n' "$1"; }
+ensure_nagbot_computer_agent() {
+    local pid_file="$CACHE_ROOT/nagbot-computer-agent.lock/pid" pid=""
+    [[ -r "$pid_file" ]] && pid=$(<"$pid_file")
+    if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
+        nohup "$NOWPLAYING_ROOT/scripts/nagbot_computer_agent.sh" \
+            >"$CACHE_ROOT/nagbot-computer-agent.log" 2>&1 &
+    fi
+}
+read_local_activity() {
+    local json previous updated now
+    previous="$last_local_computer_active"
+    ensure_nagbot_computer_agent
+    json=$(cat "$CACHE_ROOT/nagbot-computer-agent-state.json" 2>/dev/null || true)
+    updated=$(jq -r '.updated_epoch // 0' <<<"${json:-{}}" 2>/dev/null || printf 0)
+    now=$(epoch_now)
+    if ! [[ "$updated" =~ ^[0-9]+$ ]] || (( now - updated > 5 )); then
+        json=$("$NOWPLAYING_ROOT/scripts/nca_plugins/session_state.sh" 2>/dev/null || true)
+        if jq -e . >/dev/null 2>&1 <<<"$json"; then
+            json=$(jq -c '.in_use=.active | .screen_off=.display_asleep' <<<"$json")
+        fi
+    fi
+    if ! jq -e . >/dev/null 2>&1 <<<"$json"; then
+        json='{"in_use":true,"locked":false,"screen_off":false,"idle_seconds":0,"reason":"agent unavailable"}'
+    fi
+    local_computer_active=$(jq -r '.in_use // .active // true' <<<"$json")
+    local_computer_locked=$(jq -r '.locked // false' <<<"$json")
+    local_display_asleep=$(jq -r '.screen_off // .display_asleep // false' <<<"$json")
+    local_idle_seconds=$(jq -r '.idle_seconds // 0' <<<"$json")
+    local_activity_reason=$(jq -r '.reason // "unknown"' <<<"$json")
+    local_activity_changed="false"
+    [[ -n "$previous" && "$local_computer_active" != "$previous" ]] && local_activity_changed="true"
+    last_local_computer_active="$local_computer_active"
+}
 normalize_ints() {
     local v
     for v; do
@@ -1363,6 +1399,31 @@ while true; do
     immediate_poll_requested="false"
     loop_start_ms=$(timestamp_ms)
     loop_now_epoch=$(epoch_now)
+    read_local_activity
+    if [[ "$local_computer_active" != "true" ]]; then
+        # On a real active -> inactive transition, publish one final idle media
+        # edge, then stop the expensive Music/browser/VLC work. Activity itself
+        # continues on the lightweight one-second loop so wake is detected fast.
+        if [[ "$local_activity_changed" == "true" ]]; then
+            music_playing="false"; youtube_playing="false"; media_remote_playing="false"
+            media_status="Idle"; media_source=""; idle_start_epoch="$loop_now_epoch"; idle_duration=0
+            force_emit_this_poll="true"
+            refresh_ha_media_active_state
+            emit_home_assistant
+            clear
+            echo "*** NagMenu NowPlaying ***"
+            echo ""
+            echo "     Media polling suspended: $local_activity_reason"
+            echo "     Activity heartbeat remains online."
+        fi
+        next_check_interval="$LOCAL_INACTIVE_CHECK_INTERVAL"
+        check_for_self_update
+        sleep "$LOCAL_INACTIVE_CHECK_INTERVAL" &
+        sleep_pid=$!
+        wait "$sleep_pid" 2>/dev/null || true
+        sleep_pid=""
+        continue
+    fi
     media_remote_json=$(read_media_remote_defaults)
     parse_media_remote_json "$media_remote_json"
     # ========================================================
