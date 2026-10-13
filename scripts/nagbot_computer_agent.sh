@@ -23,7 +23,13 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   rm -rf "$LOCK_DIR"; mkdir "$LOCK_DIR" || exit 1
 fi
 printf '%s\n' "$$" > "$LOCK_DIR/pid"
-trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
+cleanup_agent_lock() {
+  local owner
+  owner=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
+  [[ "$owner" == "$$" ]] && rm -rf "$LOCK_DIR"
+}
+trap cleanup_agent_lock EXIT
+trap 'exit 0' INT TERM
 
 last_signature=""; last_emit=0
 while true; do
