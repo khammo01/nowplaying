@@ -32,7 +32,7 @@ OMDB_API_KEY=test-only
         }))
         commands = {
             'sleep': '#!/bin/bash\nkill -TERM "$PPID"\n',
-            'osascript': '#!/bin/bash\ncase "${1:-}" in\n*safari*) echo \'{"playing":' + str(playing).lower() + ',"title":"Test video","duration":60,"currentTime":2,"video_id":"active123","url":"https://www.youtube.com/watch?v=active123"}\';;\n-e) echo \'{"isPlaying":true,"title":"Amazon product preview","artist":"Safari","album":"Safari","appName":"Safari","bundleIdentifier":"com.apple.Safari","duration":18}\';;\n*) echo \'{"playing":false}\';;\nesac\n',
+            'osascript': '#!/bin/bash\ncase "${1:-}" in\n*safari*) echo \'{"playing":' + str(playing).lower() + ',"title":"Test video","duration":60,"currentTime":2,"video_id":"active123","url":"https://www.youtube.com/watch?v=active123"}\';;\n-e) echo \'{"isPlaying":true,"title":"ECS Tuning - Checkout","artist":"Safari","album":"Safari","appName":"Safari","bundleIdentifier":"","parentBundleIdentifier":"","duration":0}\';;\n*) echo \'{"playing":false}\';;\nesac\n',
             'pmset': '#!/bin/bash\nexit 0\n',
             'ps': '#!/bin/bash\necho "2.5 coreaudiod"\n',
             'scp': '#!/bin/bash\nexit 0\n',
@@ -59,7 +59,7 @@ OMDB_API_KEY=test-only
         assert payload['youtube_playing'] == playing, payload
         if not playing:
             assert payload['media_status'] != 'Playing', payload
-            assert payload['track'] != 'Amazon product preview', payload
+            assert payload['track'] != 'ECS Tuning - Checkout', payload
         queue_ids = [item['video_id'] for item in payload['youtube_queue']]
         assert 'queued456' in queue_ids, payload['youtube_queue']
         assert ('active123' not in queue_ids) == playing, payload['youtube_queue']

@@ -771,8 +771,18 @@ parse_media_remote_json() {
     case "$effective_bundle_id" in
         com.apple.Music) btt_media_source="music" ;;
         org.videolan.vlc|org.videolan.vlc*) btt_media_source="vlc" ;;
-        com.apple.Safari|com.google.Chrome|com.google.Chrome.*) btt_media_source="browser" ;;
-        *) btt_media_source="mediaremote" ;;
+        com.apple.Safari|com.google.Chrome|com.google.Chrome.*|com.microsoft.edgemac|org.mozilla.firefox|company.thebrowser.Browser|com.brave.Browser|com.vivaldi.Vivaldi|com.operasoftware.Opera|org.chromium.Chromium)
+            btt_media_source="browser" ;;
+        *)
+            # Some MediaRemote browser records omit both bundle identifiers.
+            # Fall back to the publishing application name so an embedded
+            # checkout/product clip cannot masquerade as a native player.
+            case "$btt_app_name" in
+                Safari|Google\ Chrome|Chrome|Microsoft\ Edge|Firefox|Arc|Brave\ Browser|Vivaldi|Opera|Chromium)
+                    btt_media_source="browser" ;;
+                *) btt_media_source="mediaremote" ;;
+            esac
+            ;;
     esac
 }
 apply_media_remote_defaults() {
