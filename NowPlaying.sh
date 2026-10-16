@@ -1141,13 +1141,19 @@ emit_artwork() {
 
 emit_home_assistant() {
     debugecho "DEBUG Updating HA"
-    # SoundSource can maintain a routed-device volume that differs from the
-    # macOS master value. Controller commands persist the confirmed target here.
+    # Report the Mac's current output-volume state. The controller cache is
+    # only a fast-path fallback; treating it as authoritative allowed a stale
+    # 16/16 value to survive indefinitely on the Work Mac.
     local routed_volume_file="$CACHE_ROOT/soundsource-volume-percent"
-    if [[ -s "$routed_volume_file" ]]; then
+    local native_volume
+    native_volume=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || true)
+    if [[ "$native_volume" =~ ^[0-9]+$ ]]; then
+        volume_percent="$native_volume"
+        printf '%s' "$volume_percent" > "$routed_volume_file"
+    elif [[ -s "$routed_volume_file" ]]; then
         volume_percent=$(<"$routed_volume_file")
     else
-        volume_percent=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || printf '0')
+        volume_percent=0
     fi
     normalize_ints idle_duration playback_position_percent volume_percent duration_sec currentTime youtube_video_count high_score
     normalize_bools youtube_playing music_playing
