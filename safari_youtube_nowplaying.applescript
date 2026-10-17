@@ -1040,7 +1040,16 @@ with timeout of 12 seconds
 		"     ? (mp.getVideoData()||{})" & linefeed & ¬
 		"     : {};" & linefeed & ¬
 		"" & linefeed & ¬
+		" let playerResponseVD={};" & linefeed & ¬
+		" try {" & linefeed & ¬
+		"   const response=(mp&&typeof mp.getPlayerResponse==='function')" & linefeed & ¬
+		"     ? (mp.getPlayerResponse()||{})" & linefeed & ¬
+		"     : {};" & linefeed & ¬
+		"   playerResponseVD=response.videoDetails||{};" & linefeed & ¬
+		" } catch(e) {}" & linefeed & ¬
+		"" & linefeed & ¬
 		" const playerVDId=vd.video_id||vd.videoId||'';" & linefeed & ¬
+		" const playerResponseVideoId=playerResponseVD.videoId||'';" & linefeed & ¬
 		"" & linefeed & ¬
 		" const initialVD=" & linefeed & ¬
 		"   window?.ytInitialPlayerResponse?.videoDetails||{};" & linefeed & ¬
@@ -1049,6 +1058,10 @@ with timeout of 12 seconds
 		"" & linefeed & ¬
 		" const playerDataMatchesCurrent=" & linefeed & ¬
 		"   !!urlVideoId&&!!playerVDId&&playerVDId===urlVideoId;" & linefeed & ¬
+		" const playerResponseMatchesCurrent=" & linefeed & ¬
+		"   !!urlVideoId&&!!playerResponseVideoId&&playerResponseVideoId===urlVideoId;" & linefeed & ¬
+		" const playerResponseHasDescription=" & linefeed & ¬
+		"   playerResponseMatchesCurrent&&typeof playerResponseVD.shortDescription==='string';" & linefeed & ¬
 		"" & linefeed & ¬
 		" const initialDataMatchesCurrent=" & linefeed & ¬
 		"   !!urlVideoId&&!!initialVideoId&&initialVideoId===urlVideoId;" & linefeed & ¬
@@ -1196,6 +1209,9 @@ with timeout of 12 seconds
 		"       ''" & linefeed & ¬
 		"     )" & linefeed & ¬
 		"   : (" & linefeed & ¬
+		"       (playerResponseHasDescription" & linefeed & ¬
+		"         ? (playerResponseVD.shortDescription.trim()||'No description has been added to this video.')" & linefeed & ¬
+		"         : '')||" & linefeed & ¬
 		"       (playerDataMatchesCurrent?(vd.shortDescription||''):'')||" & linefeed & ¬
 		"       (initialDataMatchesCurrent?(initialVD.shortDescription||''):'')||" & linefeed & ¬
 		"       (pageMetadataMatchesCurrent?domDesc:'')||" & linefeed & ¬

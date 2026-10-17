@@ -29,18 +29,8 @@ fi
 
 show_rejection() {
   local detail="$1"
-  local computer_name btt_base hud_config hud_action
-  computer_name=$(/usr/sbin/scutil --get ComputerName 2>/dev/null || /bin/hostname -s)
-  if [[ "${computer_name:l}" == *"mac mini"* || "${computer_name:l}" == *"mac-mini"* ]]; then
-    btt_base="http://192.168.1.26:51520"
-  elif [[ "${computer_name:l}" == *"macbook"* || "${computer_name:l}" == *"work mac"* ]]; then
-    btt_base="http://192.168.1.179:51520"
-  else
-    local local_ip
-    local_ip="$(/usr/sbin/ipconfig getifaddr en0 2>/dev/null || true)"
-    [[ -z "$local_ip" ]] && local_ip="$(/usr/sbin/ipconfig getifaddr en1 2>/dev/null || true)"
-    btt_base="http://${local_ip}:51520"
-  fi
+  local btt_base hud_config hud_action
+  btt_base=$("$root/scripts/find_btt_base.sh" nowplaying_volume_notch 2>/dev/null || true)
   hud_config=$(/usr/bin/jq -nc --arg detail "$detail" '{
     BTTActionHUDTitle:"Next YouTube canceled",
     BTTActionHUDDetail:$detail,
@@ -59,7 +49,7 @@ show_rejection() {
     BTTPredefinedActionName:"Show HUD Overlay",
     BTTHUDActionConfiguration:$config
   }')
-  if ! /usr/bin/curl -fsS --max-time 2 -G --data-urlencode "json=$hud_action" "$btt_base/trigger_action/" >/dev/null 2>&1; then
+  if [[ -z "$btt_base" ]] || ! /usr/bin/curl -fsS --max-time 2 -G --data-urlencode "json=$hud_action" "$btt_base/trigger_action/" >/dev/null 2>&1; then
     /usr/bin/osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "Next YouTube canceled"' -e 'end run' "$detail" >/dev/null 2>&1 || true
   fi
 }
@@ -104,20 +94,10 @@ detail="${result#OK|}"
 # Refresh only after the browser has accepted the command; the former HA-side
 # 120/350 ms refreshes ran before slow tab changes had completed.
 if [[ "$action" != "open" && "$action" != "home" ]]; then
-  computer_name=$(/usr/sbin/scutil --get ComputerName 2>/dev/null || /bin/hostname -s)
-  if [[ "${computer_name:l}" == *"mac mini"* || "${computer_name:l}" == *"mac-mini"* ]]; then
-    btt_candidates=("http://192.168.1.26:51520")
-  elif [[ "${computer_name:l}" == *"macbook"* || "${computer_name:l}" == *"work mac"* ]]; then
-    btt_candidates=("http://192.168.1.179:51520")
-  else
-    local_ip="$(/usr/sbin/ipconfig getifaddr en0 2>/dev/null || true)"
-    [[ -z "$local_ip" ]] && local_ip="$(/usr/sbin/ipconfig getifaddr en1 2>/dev/null || true)"
-    btt_candidates=("http://${local_ip}:51520" "http://${local_ip}:51836")
+  base=$("$root/scripts/find_btt_base.sh" nowplaying_volume_notch 2>/dev/null || true)
+  if [[ -n "$base" ]]; then
+    /usr/bin/curl -fsS --max-time 1 "$base/trigger_named_async_without_response/?trigger_name=nowplaying_refresh" >/dev/null 2>&1 || true
   fi
-  for base in "${btt_candidates[@]}"; do
-    [[ "$base" == "http://:51520" || "$base" == "http://:51836" ]] && continue
-    /usr/bin/curl -fsS --max-time 1 "$base/trigger_named_async_without_response/?trigger_name=nowplaying_refresh" >/dev/null 2>&1 && break
-  done
 fi
 
 # The command has just changed selection/playback. Refresh the cheap inventory

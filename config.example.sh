@@ -18,5 +18,12 @@ BEARER_TOKEN="REPLACE_ME"
 # SOURCE_DEVICE="office-mac-mini"
 # Optional: VLC movie metadata. Without a key, filename metadata is used.
 OMDB_API_KEY=""
+# Optional BetterTouchTool HTTP endpoint for this Mac. Leave blank to discover
+# BTT on localhost and the Mac's active network interfaces. Set this only when
+# BTT is deliberately bound to one address, for example:
+# BTT_BASE_URL="http://192.0.2.20:51520"
+BTT_BASE_URL=""
+# Space-separated ports checked during automatic discovery.
+BTT_PORTS="51520 51836"
 # Optional: defaults to $NOWPLAYING_ROOT/ssh/id_ecdsa_ha
 # SSH_KEY="$HOME/.ssh/your_home_assistant_key"

@@ -191,6 +191,20 @@ on run argv
 		return my javascript_on_target(targetParts, captionsJS)
 	end if
 
+	-- Exit fullscreen directly inside the tab. A System Events "f" keystroke
+	-- can first move macOS back to the browser's normal Space while Safari
+	-- leaves the video playing in its fullscreen Space. Safari still requires a
+	-- user-like keystroke to *enter* fullscreen, so that path falls through to
+	-- the focused-key handling below.
+	if commandName is "fullscreen" then
+		set fullscreenProbeJS to "(() => { const v=document.querySelector('video'),p=document.getElementById('movie_player'); return !!(document.fullscreenElement||document.webkitFullscreenElement||(v&&v.webkitDisplayingFullscreen)||(p&&p.classList.contains('ytp-fullscreen'))); })()"
+		set isFullscreen to my javascript_on_target(targetParts, fullscreenProbeJS)
+		if isFullscreen then
+			set exitFullscreenJS to "(() => { const v=document.querySelector('video'),b=document.querySelector('.ytp-fullscreen-button'); try { if(document.fullscreenElement&&document.exitFullscreen){document.exitFullscreen();return 'fullscreen:off';} if(document.webkitFullscreenElement&&document.webkitExitFullscreen){document.webkitExitFullscreen();return 'fullscreen:off';} if(v&&v.webkitDisplayingFullscreen&&v.webkitExitFullscreen){v.webkitExitFullscreen();return 'fullscreen:off';} if(b){b.click();return 'fullscreen:off';} } catch(e){return 'fullscreen:error';} return 'fullscreen:not-active'; })()"
+			return my javascript_on_target(targetParts, exitFullscreenJS)
+		end if
+	end if
+
 	set previousApp to ""
 	try
 		tell application "System Events" to set previousApp to name of first application process whose frontmost is true

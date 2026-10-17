@@ -6,6 +6,8 @@
 
 set -u
 
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
 CACHE_FILE="${HOME}/NowPlaying/cache/soundsource-volume-percent"
 LOG_FILE="/tmp/nowplaying-volume-adjust.log"
 LOCK_DIR="${HOME}/NowPlaying/cache/volume-action.lock"
@@ -55,36 +57,9 @@ else
   count=0
 fi
 
-# The Mini and Work Mac use different BTT webserver ports. BTT may listen only
-# on one physical interface rather than localhost. Probe every active Mac
-# address; the Mini commonly has Ethernet and Wi-Fi active at the same time.
-btt_base=""
-computer_name=$(/usr/sbin/scutil --get ComputerName 2>/dev/null || /bin/hostname -s)
-computer_name_lower=$(printf '%s' "$computer_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
-if [[ "$computer_name_lower" == *"mac mini"* || "$computer_name_lower" == *"mac-mini"* ]]; then
-  # BTT on the Mini is intentionally bound to Wi-Fi. Ignore Ethernet.
-  local_ips=(192.168.1.26)
-elif [[ "$computer_name_lower" == *"macbook"* || "$computer_name_lower" == *"work mac"* ]]; then
-  local_ips=(192.168.1.179)
-else
-  local_ips=(127.0.0.1)
-  for interface in en0 en1 en5 en6 en7 en8; do
-    interface_ip=$(/usr/sbin/ipconfig getifaddr "$interface" 2>/dev/null || true)
-    [[ -n "$interface_ip" ]] && local_ips+=("$interface_ip")
-  done
-fi
-for local_ip in "${local_ips[@]}"; do
-  for local_port in 51520 51836; do
-    candidate_base="http://${local_ip}:${local_port}"
-  [[ "$candidate_base" == "http://:51520" || "$candidate_base" == "http://:51836" ]] && continue
-  if /usr/bin/curl -fsS --max-time 0.35 \
-      "${candidate_base}/get_string_variable/?variableName=nowplaying_volume_notch" >/dev/null 2>&1; then
-    btt_base="$candidate_base"
-    break
-  fi
-  done
-  [[ -n "$btt_base" ]] && break
-done
+# Prefer the per-Mac private setting, then discover BTT on this Mac's active
+# interfaces. The public source contains no household network addresses.
+btt_base=$("$ROOT/scripts/find_btt_base.sh" nowplaying_volume_notch 2>/dev/null || true)
 
 # Snapshot the display-only notch before emitting any key events. The BTT
 # triggers may update their own variables asynchronously; reading afterward

@@ -11,6 +11,11 @@ Requires macOS, Bash, `jq`, Python 3, and the macOS `osascript`/`osacompile` too
 3. Set `SSH_KEY` to a local key authorized to copy artwork to the configured Home Assistant server. The default is `ssh/id_ecdsa_ha` beneath the checkout. Keys must be provisioned separately; they never sync through Git.
 4. Run `./scripts/check.sh`, then `./NowPlaying.sh`.
 
+If BetterTouchTool's web server is bound to a specific interface, set the
+machine-local `BTT_BASE_URL` in `config.local.sh`. Otherwise NowPlaying finds
+BTT through localhost or an active local interface. Private LAN addresses do
+not belong in tracked scripts.
+
 `NOWPLAYING_CONFIG=/absolute/path/to/config.local.sh ./NowPlaying.sh` selects an alternate local configuration. `OMDB_API_KEY` is optional; VLC falls back to filename metadata without it.
 
 ## Files
@@ -74,6 +79,10 @@ When both computers have commits, do not force-push or reset away either copy. F
 The root `.gitignore` uses an allowlist. Local settings, SSH keys, certificates, credentials, state JSON, caches, logs, compiled scripts, and `local-archive/` are excluded. New top-level source files must be added to the allowlist deliberately. Review `git diff --cached` before committing; never use `git add -f` on private files.
 
 See [cleanup notes](docs/CLEANUP.md) for the migration archive and remaining implementation limitations.
+
+## License
+
+NowPlaying is released under the [MIT License](LICENSE).
 
 ## Browser media allowlist
 

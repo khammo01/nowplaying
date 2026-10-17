@@ -47,6 +47,30 @@ def youtube_detached(action: str) -> str:
         )
     )
 
+
+def exact_youtube_resume() -> str:
+    """Resume one cached video and refresh only after Safari accepts play."""
+    return (
+        "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
+        'mkdir -p "$HOME/NowPlaying/cache"\n'
+        '(\n'
+        f'  result=$(/usr/bin/osascript {ROOT}/youtube_control.applescript play_id "$video_id" 2>&1)\n'
+        '  print -r -- "$result" >>"$HOME/NowPlaying/cache/btt-media-actions.log"\n'
+        '  if [[ "$result" == OK\\|* ]]; then\n'
+        '    lock_file="$HOME/NowPlaying/cache/nowplaying.lock/lock.json"\n'
+        '    collector_pid=""\n'
+        '    if [[ -r "$lock_file" ]]; then\n'
+        "      collector_pid=$(/usr/bin/jq -r '.pid // empty' \"$lock_file\" 2>/dev/null)\n"
+        '    elif [[ -r "$HOME/NowPlaying/cache/nowplaying.lock/pid" ]]; then\n'
+        '      collector_pid=$(<"$HOME/NowPlaying/cache/nowplaying.lock/pid")\n'
+        '    fi\n'
+        '    [[ "$collector_pid" == <-> ]] && /bin/kill -USR1 "$collector_pid" 2>/dev/null || true\n'
+        '  fi\n'
+        ') </dev/null >/dev/null 2>&1 &!\n'
+        'print -r -- "queued"'
+    )
+
 COMMANDS = {
     "playpause_toggle": READ_SOURCE + detached(f'{ROOT}/media_command.sh playpause "$source"'),
     "mac_studio_next_song": READ_SOURCE + detached(f'{ROOT}/media_command.sh next "$source"'),
@@ -69,18 +93,23 @@ COMMANDS = {
         READ_VOLUME + detached(f'{ROOT}/media_volume_adjust.sh "$delta"')
     ),
     "youtube_caption_toggle": detached(
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &! '
+        '/bin/sleep 0.06; '
         f'/usr/bin/osascript {ROOT}/youtube_caption_toggle.applescript'
     ),
     "mac_studio_youtube_slower": detached(
-        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 & '
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &! '
+        '/bin/sleep 0.06; '
         f'/usr/bin/osascript {ROOT}/youtube_target_command.applescript slower'
     ),
     "mac_studio_youtube_faster": detached(
-        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 & '
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &! '
+        '/bin/sleep 0.06; '
         f'/usr/bin/osascript {ROOT}/youtube_target_command.applescript faster'
     ),
     "mac_mini_youtube_full_screen_toggle": detached(
-        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 & '
+        '/usr/bin/afplay "/System/Library/Sounds/Tink.aiff" >/dev/null 2>&1 &! '
+        '/bin/sleep 0.06; '
         f'/usr/bin/osascript {ROOT}/youtube_target_command.applescript fullscreen'
     ),
     "nowplaying_refresh": (
@@ -105,11 +134,7 @@ NEW_TRIGGERS = {
     "media_controller_refresh_teams_mute_state": detached(
         f"/usr/bin/osascript {ROOT}/teams_mute_state.applescript"
     ),
-    "mac_youtube_play_cached": (
-        "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
-        "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
-        + detached(f'/usr/bin/osascript {ROOT}/youtube_control.applescript play_id "$video_id"')
-    ),
+    "mac_youtube_play_cached": exact_youtube_resume(),
     "media_controller_set_input_volume": (
         "target=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"meeting_input_volume\"' 2>/dev/null)\n"
