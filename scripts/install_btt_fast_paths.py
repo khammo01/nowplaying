@@ -125,6 +125,9 @@ NEW_TRIGGERS = {
     "music_shuffle_toggle": detached(
         f"/usr/bin/osascript {ROOT}/music_shuffle_toggle.applescript"
     ),
+    "music_genius_recommendation": detached(
+        f"/usr/bin/osascript {ROOT}/music_genius_recommendation.applescript"
+    ),
     "media_controller_open_teams": detached(
         "/usr/bin/osascript -e 'tell application \"Microsoft Teams\" to activate'"
     ),

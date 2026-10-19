@@ -233,15 +233,47 @@ end play_youtube
 
 on play_video_id(videoID)
 	if videoID is "" then return "ERROR|Missing YouTube video ID"
+	set cachedResult to ""
 	try
 		set query to "/usr/bin/jq -r --arg id " & quoted form of videoID & " '.tabs[] | select(.is_youtube_video==true and (.url | contains($id))) | [.browser,.window_index,.tab_index,.url] | join(\"|\")' " & quoted form of my inventory_path() & " | /usr/bin/head -n 1"
 		set cacheText to do shell script query
 		set p to my split_pipe(cacheText)
-		if (count of p) < 4 then return "ERROR|That queued video is no longer open"
-		return my play_target(item 1 of p, item 2 of p as integer, item 3 of p as integer, item 4 of p)
-	on error errorText
-		return "ERROR|" & errorText
+		if (count of p) ≥ 4 then
+			set cachedResult to my play_target(item 1 of p, item 2 of p as integer, item 3 of p as integer, item 4 of p)
+			if cachedResult starts with "OK|" then return cachedResult
+		end if
+	on error
 	end try
+
+	-- Window and tab indices are only hints. Safari can renumber them whenever a
+	-- tab or window closes, while the queue still contains a perfectly valid
+	-- video ID. Recover against the live browser before rejecting the press.
+	if application "Safari" is running then
+		tell application "Safari"
+			repeat with wi from 1 to count of windows
+				repeat with ti from 1 to count of tabs of window wi
+					try
+						set liveURL to URL of tab ti of window wi as text
+						if my is_youtube_video(liveURL) and liveURL contains videoID then return my play_target("Safari", wi, ti, liveURL)
+					end try
+				end repeat
+			end repeat
+		end tell
+	end if
+	if application "Google Chrome" is running then
+		tell application "Google Chrome"
+			repeat with wi from 1 to count of windows
+				repeat with ti from 1 to count of tabs of window wi
+					try
+						set liveURL to URL of tab ti of window wi as text
+						if my is_youtube_video(liveURL) and liveURL contains videoID then return my play_target("Google Chrome", wi, ti, liveURL)
+					end try
+				end repeat
+			end repeat
+		end tell
+	end if
+	if cachedResult starts with "ERROR|" then return cachedResult
+	return "ERROR|That queued video is no longer open"
 end play_video_id
 
 on open_youtube()

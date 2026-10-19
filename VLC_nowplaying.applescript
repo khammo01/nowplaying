@@ -23,6 +23,8 @@ on parse_media_candidate(raw_name, media_path)
 raw_name = sys.argv[1]
 media_path = sys.argv[2]
 filename_guess = os.path.basename(media_path) if media_path else ''
+asset_extension = os.path.splitext(filename_guess)[1].lower()
+is_mjpeg_asset = asset_extension in ('.mjpeg', '.mjpg')
 
 def clean(s):
     if not s:
@@ -78,7 +80,9 @@ if use_filename:
         'alt_year': year1,
         'filename_guess': filename_guess,
         'clean_raw_name': clean1,
-        'clean_filename': clean2
+        'clean_filename': clean2,
+        'numeric_filename': bool(re.fullmatch(r'\\d+', title2)),
+        'skip_metadata_lookup': is_mjpeg_asset or bool(re.fullmatch(r'\\d+', title2))
     }
 else:
     result = {
@@ -88,7 +92,9 @@ else:
         'alt_year': year2,
         'filename_guess': filename_guess,
         'clean_raw_name': clean1,
-        'clean_filename': clean2
+        'clean_filename': clean2,
+        'numeric_filename': bool(re.fullmatch(r'\\d+', title1)),
+        'skip_metadata_lookup': is_mjpeg_asset or bool(re.fullmatch(r'\\d+', title1))
     }
 
 print(json.dumps(result))"
@@ -232,9 +238,18 @@ set alt_year to my json_get_field(parse_json, "alt_year")
 set filename_guess to my json_get_field(parse_json, "filename_guess")
 set clean_raw_name to my json_get_field(parse_json, "clean_raw_name")
 set clean_filename to my json_get_field(parse_json, "clean_filename")
+set numeric_filename to my json_get_field(parse_json, "numeric_filename")
+set skip_metadata_lookup to my json_get_field(parse_json, "skip_metadata_lookup")
 set parse_error to my json_get_field(parse_json, "error")
 
-set omdb_json to my omdb_lookup(parsed_title, parsed_year, alt_title, alt_year)
+if skip_metadata_lookup is "True" then
+	-- Bare numbered assets such as 007.mjpeg are common on removable media and
+	-- MJPEG display animations likewise provide no trustworthy movie-title
+	-- evidence. Keep the local filename instead of allowing an unrelated match.
+	set omdb_json to "{\"Response\":\"False\",\"Error\":\"Local asset; metadata lookup skipped\"}"
+else
+	set omdb_json to my omdb_lookup(parsed_title, parsed_year, alt_title, alt_year)
+end if
 
 set omdb_title to my json_get_field(omdb_json, "Title")
 set omdb_year to my json_get_field(omdb_json, "Year")
@@ -251,6 +266,6 @@ set omdb_error to my json_get_field(omdb_json, "Error")
 
 if omdb_title is "" then set omdb_title to parsed_title
 if omdb_year is "" then set omdb_year to parsed_year
-if omdb_description is "" then set omdb_description to parsed_title
+if omdb_description is "" and skip_metadata_lookup is not "True" then set omdb_description to parsed_title
 
 return "{\"playing\":\"" & my escape_json_string(vlc_playing) & "\",\"raw_name\":\"" & my escape_json_string(vlc_raw_name) & "\",\"filename_guess\":\"" & my escape_json_string(filename_guess) & "\",\"clean_raw_name\":\"" & my escape_json_string(clean_raw_name) & "\",\"clean_filename\":\"" & my escape_json_string(clean_filename) & "\",\"parsed_title\":\"" & my escape_json_string(parsed_title) & "\",\"parsed_year\":\"" & my escape_json_string(parsed_year) & "\",\"alt_title\":\"" & my escape_json_string(alt_title) & "\",\"alt_year\":\"" & my escape_json_string(alt_year) & "\",\"parse_error\":\"" & my escape_json_string(parse_error) & "\",\"media_path\":\"" & my escape_json_string(vlc_media_path) & "\",\"duration\":\"" & my escape_json_string(vlc_duration) & "\",\"position\":\"" & my escape_json_string(vlc_position) & "\",\"title\":\"" & my escape_json_string(omdb_title) & "\",\"year\":\"" & my escape_json_string(omdb_year) & "\",\"director\":\"" & my escape_json_string(omdb_director) & "\",\"writer\":\"" & my escape_json_string(omdb_writer) & "\",\"actors\":\"" & my escape_json_string(omdb_actors) & "\",\"genre\":\"" & my escape_json_string(omdb_genre) & "\",\"description\":\"" & my escape_json_string(omdb_description) & "\",\"imdbID\":\"" & my escape_json_string(omdb_imdbID) & "\",\"imdbRating\":\"" & my escape_json_string(omdb_imdbRating) & "\",\"poster\":\"" & my escape_json_string(omdb_poster) & "\",\"omdb_response\":\"" & my escape_json_string(omdb_response) & "\",\"omdb_error\":\"" & my escape_json_string(omdb_error) & "\",\"omdb\":" & omdb_json & "}"

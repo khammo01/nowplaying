@@ -17,7 +17,9 @@ cases = {
     'https://www.amazon.com/dp/example': False,
     'https://www.amazon.com/dp/example?redirect=music.amazon.com': False,
     'https://youtube.com.example.test/watch?v=abc': False,
-    'https://www.youtube.com/': False,
+    # The homepage can host YouTube's real audible miniplayer. The browser-side
+    # probe rejects muted hover previews before they can become Now Playing.
+    'https://www.youtube.com/': True,
     'https://www.youtube.com/results?search_query=test': False,
 }
 

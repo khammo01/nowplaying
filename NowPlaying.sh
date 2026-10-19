@@ -133,7 +133,9 @@ track="startup"; artist="startup"; album="startup"; genre="startup"; year="start
 view_count=""; published_date=""; subscriber_count=""
 thumbnail_url="/local/default_music.jpg"; duration_hms="00:00"; duration_sec=0; currentTime=0; currentTimehms="00:00"
 playback_speed="1.0"; playback_position_percent=0; volume_percent=0; progress_bar_full=""; playlist_name=""; video_id=""; url=""; media_source=""
+music_shuffle_enabled="false"; music_shuffle_available="false"; music_next_track=""
 btt_track=""; btt_artist=""; btt_album=""; btt_app_name=""; btt_bundle_id=""; btt_parent_bundle_id=""; btt_duration_sec=0; btt_media_source="mediaremote"
+quicklook_media_kind=""
 
 
 # ============================================================
@@ -616,6 +618,17 @@ with timeout of 5 seconds
         end try
         set trackDuration to duration of current track
         set trackPosition to player position
+        try
+            set shuffleState to shuffle enabled
+        on error
+            set shuffleState to false
+        end try
+        try
+            set trackClass to class of current track as string
+            set shuffleAvailable to trackClass is not "URL track"
+        on error
+            set shuffleAvailable to false
+        end try
     end tell
     set trackName to escape_text(trackName)
     set trackArtist to escape_text(trackArtist)
@@ -633,7 +646,9 @@ with timeout of 5 seconds
     set json to json & Q & "synopsis" & Q & ": " & Q & trackSynopsis & Q & ","
     set json to json & Q & "year" & Q & ": " & trackYear & ","
     set json to json & Q & "duration" & Q & ": " & trackDuration & ","
-    set json to json & Q & "position" & Q & ": " & trackPosition
+    set json to json & Q & "position" & Q & ": " & trackPosition & ","
+    set json to json & Q & "shuffle_enabled" & Q & ": " & shuffleState & ","
+    set json to json & Q & "shuffle_available" & Q & ": " & shuffleAvailable
     set json to json & "}"
     return json
 end timeout
@@ -649,6 +664,7 @@ parse_music_json() {
     local json="$1" row
     local parsed_playing parsed_track parsed_artist parsed_album
     local parsed_genre parsed_year parsed_lyrics parsed_synopsis parsed_duration parsed_position
+    local parsed_shuffle_enabled parsed_shuffle_available
     row=$(
         jq -r '
             [
@@ -661,14 +677,18 @@ parse_music_json() {
                 (.lyrics // ""),
                 (.synopsis // .description // ""),
                 ((.duration // 0) | tonumber? // 0 | floor),
-                ((.position // 0) | tonumber? // 0 | floor)
+                ((.position // 0) | tonumber? // 0 | floor),
+                (.shuffle_enabled // false),
+                (.shuffle_available // false)
             ]
             | map(tostring | gsub("[\r\n]"; " ") | gsub("\u001f"; " "))
             | join("\u001f")
         ' <<< "$json" 2>/dev/null
-    ) || row=$'false\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f0\x1f0'
-    IFS=$'\x1f' read -r parsed_playing parsed_track parsed_artist parsed_album parsed_genre parsed_year parsed_lyrics parsed_synopsis parsed_duration parsed_position <<< "$row"
+    ) || row=$'false\x1f\x1f\x1f\x1f\x1f\x1f\x1f\x1f0\x1f0\x1ffalse\x1ffalse'
+    IFS=$'\x1f' read -r parsed_playing parsed_track parsed_artist parsed_album parsed_genre parsed_year parsed_lyrics parsed_synopsis parsed_duration parsed_position parsed_shuffle_enabled parsed_shuffle_available <<< "$row"
     music_playing="$parsed_playing"; normalize_bools music_playing
+    music_shuffle_enabled="$parsed_shuffle_enabled"; music_shuffle_available="$parsed_shuffle_available"
+    normalize_bools music_shuffle_enabled music_shuffle_available
     if [[ "$music_playing" == "true" ]]; then
         media_source="music"
         track="$parsed_track"; artist="$parsed_artist"; album="$parsed_album"; genre="$parsed_genre"
@@ -735,9 +755,24 @@ parse_video_json() {
 }
 
 read_media_remote_defaults() {
-    osascript -e \
-        'tell application "BetterTouchTool" to get_string_variable "BTTNowPlayingInfoSequoia"' \
-        2>/dev/null || printf '{}'
+    # BTT can block an AppleEvent indefinitely while its helper is refreshing.
+    # Bound this optional fast path so one missed sample never freezes the full
+    # Music/browser/VLC polling loop.
+    python3 - <<'PY'
+import subprocess
+
+try:
+    result = subprocess.run(
+        ["osascript", "-e", 'tell application "BetterTouchTool" to get_string_variable "BTTNowPlayingInfoSequoia"'],
+        capture_output=True,
+        text=True,
+        timeout=1.5,
+        check=False,
+    )
+    print(result.stdout.strip() or "{}")
+except subprocess.TimeoutExpired:
+    print("{}")
+PY
 }
 parse_media_remote_json() {
     local json="$1" row parsed_playing
@@ -771,6 +806,7 @@ parse_media_remote_json() {
     case "$effective_bundle_id" in
         com.apple.Music) btt_media_source="music" ;;
         org.videolan.vlc|org.videolan.vlc*) btt_media_source="vlc" ;;
+        com.apple.quicklook.QuickLookUIService|com.apple.quicklook.*) btt_media_source="quicklook" ;;
         com.apple.Safari|com.google.Chrome|com.google.Chrome.*|com.microsoft.edgemac|org.mozilla.firefox|company.thebrowser.Browser|com.brave.Browser|com.vivaldi.Vivaldi|com.operasoftware.Opera|org.chromium.Chromium)
             btt_media_source="browser" ;;
         *)
@@ -785,6 +821,92 @@ parse_media_remote_json() {
             ;;
     esac
 }
+read_quicklook_selection_path() {
+    local selected_path
+    selected_path=$(osascript <<'APPLESCRIPT' 2>/dev/null
+tell application "Finder"
+    try
+        if (count of selection) is 1 then
+            return POSIX path of ((item 1 of selection) as alias)
+        end if
+    end try
+end tell
+return ""
+APPLESCRIPT
+    )
+    if [[ -n "$selected_path" && -f "$selected_path" ]]; then
+        printf '%s\n' "$selected_path"
+        return
+    fi
+
+    # Finder clears its selection when some Quick Look entry points take focus.
+    # The preview service still holds the actual media file open, which is a
+    # stronger identity than an absent MediaRemote title.
+    local pid candidate
+    while IFS= read -r pid; do
+        [[ "$pid" =~ ^[0-9]+$ ]] || continue
+        candidate=$(lsof -Fn -p "$pid" 2>/dev/null | sed -n 's/^n//p' |
+            grep -Ei '\.(mp3|m4a|aac|wav|aif|aiff|flac|ogg|mp4|m4v|mov|mkv|avi|webm|mjpeg|mjpg)$' |
+            tail -n 1)
+        [[ -n "$candidate" && -f "$candidate" ]] && printf '%s\n' "$candidate"
+    done < <(pgrep -f 'QuickLookUIService\.xpc/Contents/MacOS/QuickLookUIService' 2>/dev/null)
+}
+read_quicklook_file_metadata() {
+    python3 - "$1" <<'PY'
+import json
+import re
+import subprocess
+import sys
+
+path = sys.argv[1]
+
+def mdls_value(attribute):
+    try:
+        raw = subprocess.check_output(
+            ["mdls", "-raw", "-name", attribute, path],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=0.8,
+        ).strip()
+    except (subprocess.SubprocessError, OSError):
+        return ""
+    if not raw or raw == "(null)":
+        return ""
+    if raw.startswith("("):
+        values = re.findall(r'"((?:\\.|[^"\\])*)"', raw)
+        return ", ".join(values)
+    return raw.strip('"')
+
+elapsed = 0
+cli_duration = 0
+cli = "/opt/homebrew/bin/nowplaying-cli"
+try:
+    lines = subprocess.check_output(
+        [cli, "get", "elapsedTime", "duration"],
+        text=True,
+        stderr=subprocess.DEVNULL,
+        timeout=0.8,
+    ).splitlines()
+    if len(lines) > 0 and lines[0] != "null":
+        elapsed = max(0, int(float(lines[0])))
+    if len(lines) > 1 and lines[1] != "null":
+        cli_duration = max(0, int(float(lines[1])))
+except (subprocess.SubprocessError, OSError, ValueError):
+    pass
+
+try:
+    indexed_duration = max(0, int(float(mdls_value("kMDItemDurationSeconds") or 0)))
+except ValueError:
+    indexed_duration = 0
+
+print(json.dumps({
+    "artist": mdls_value("kMDItemAuthors"),
+    "album": mdls_value("kMDItemAlbum"),
+    "elapsed": elapsed,
+    "duration": cli_duration or indexed_duration,
+}, ensure_ascii=False))
+PY
+}
 apply_media_remote_defaults() {
     [[ "$media_remote_playing" == "true" ]] || return
 
@@ -796,6 +918,46 @@ apply_media_remote_defaults() {
     if [[ "$btt_media_source" == "browser" && "$youtube_playing" != "true" ]]; then
         debugecho "DEBUG Ignoring unverified browser MediaRemote item: ${btt_track:-unknown}"
         media_remote_playing="false"
+        return
+    fi
+
+    # Quick Look publishes a real MediaRemote playback edge but commonly omits
+    # title, artist, and artwork. Finder's single selected item is the file being
+    # previewed. Use that local identity directly and never guess an online title.
+    if [[ "$btt_media_source" == "quicklook" ]]; then
+        local quicklook_path quicklook_name quicklook_folder quicklook_metadata quicklook_artist quicklook_album quicklook_ext
+        local quicklook_elapsed quicklook_duration
+        quicklook_path=$(read_quicklook_selection_path | tail -n 1)
+        if [[ -n "$quicklook_path" ]]; then
+            quicklook_name=$(basename "$quicklook_path")
+            quicklook_ext="${quicklook_name##*.}"
+            quicklook_ext=$(printf '%s' "$quicklook_ext" | tr '[:upper:]' '[:lower:]')
+            quicklook_name="${quicklook_name%.*}"
+            quicklook_folder=$(basename "$(dirname "$quicklook_path")")
+            quicklook_metadata=$(read_quicklook_file_metadata "$quicklook_path")
+            quicklook_artist=$(jq -r '.artist // ""' <<< "$quicklook_metadata")
+            quicklook_album=$(jq -r '.album // ""' <<< "$quicklook_metadata")
+            quicklook_elapsed=$(jq -r '.elapsed // 0' <<< "$quicklook_metadata")
+            quicklook_duration=$(jq -r '.duration // 0' <<< "$quicklook_metadata")
+        fi
+        media_source="quicklook"
+        case "$quicklook_ext" in
+            mp3|m4a|aac|wav|aiff|aif|flac|alac|ogg|opus|wma)
+                quicklook_media_kind="music" ;;
+            mp4|m4v|mov|mkv|avi|webm|mpeg|mpg|mjpeg|mjpg)
+                quicklook_media_kind="video" ;;
+            *)
+                quicklook_media_kind="" ;;
+        esac
+        track="${quicklook_name:-Quick Look}"
+        artist="${quicklook_artist:-Quick Look}"
+        album="${quicklook_album:-${quicklook_folder:-Local file}}"
+        genre=""; year=""; summary=""; description=""
+        view_count=""; published_date=""; subscriber_count=""; playlist_name=""
+        url="$quicklook_path"; video_id=""; thumbnail_url=""; playback_speed="1.0"
+        duration_sec="$btt_duration_sec"
+        (( duration_sec > 0 )) || duration_sec="${quicklook_duration:-0}"
+        currentTime="${quicklook_elapsed:-0}"
         return
     fi
 
@@ -915,7 +1077,11 @@ build_progress_bar() {
 # ============================================================
 
 resolve_media_status() {
-    if [[ "$music_playing" == "true" ]]; then
+    if [[ "$media_source" == "quicklook" && "$quicklook_media_kind" == "music" ]]; then
+        media_status="Music"
+    elif [[ "$media_source" == "quicklook" && "$quicklook_media_kind" == "video" ]]; then
+        media_status="Video"
+    elif [[ "$music_playing" == "true" ]]; then
         media_status="Music"
     elif [[ "$youtube_playing" == "true" ]]; then
         # Keep the long-established video state for dashboard compatibility;
@@ -1160,6 +1326,7 @@ emit_home_assistant() {
     sanitize_vars track artist album genre year summary description view_count published_date subscriber_count media_status media_source currentTimehms duration_hms playback_speed playlist_name progress_bar_full url video_id thumbnail_url artwork_version
     local payload; local resp_file="/tmp/nowplaying_ha_resp.txt"; local http_code
     local reported_video_playing="$youtube_playing"
+    [[ "$media_status" == "Video" ]] && reported_video_playing="true"
     local reported_youtube_playing="$youtube_playing"
     [[ "$media_source" == "youtube" ]] || reported_youtube_playing="false"
     local youtube_queue='[]'
@@ -1176,9 +1343,10 @@ emit_home_assistant() {
                  duration_sec: ((.media_metadata.duration_sec // 0) | tonumber? // 0 | floor)
                }
              | select(.video_id != "" and .video_id != $active_video_id)
+             | . + {thumbnail_url: ("https://img.youtube.com/vi/" + .video_id + "/mqdefault.jpg")}
             ]
             | unique_by(.video_id)
-            | .[:6]
+            | .[:12]
         ' "$CACHE_ROOT/browser-inventory.json" 2>/dev/null || printf '[]')
     fi
     local sent_at event_id
@@ -1194,7 +1362,7 @@ emit_home_assistant() {
             --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson video_playing "$reported_video_playing" --argjson youtube_playing "$reported_youtube_playing" \
             --argjson volume_percent "$volume_percent" \
             --argjson youtube_queue "$youtube_queue" \
-            --argjson music_app_playing "$music_playing" --argjson total_videos_watched "$youtube_video_count" --argjson high_score "$high_score" \
+            --argjson music_app_playing "$music_playing" --argjson music_shuffle_enabled "$music_shuffle_enabled" --argjson music_shuffle_available "$music_shuffle_available" --arg music_next_track "$music_next_track" --argjson total_videos_watched "$youtube_video_count" --argjson high_score "$high_score" \
             --argjson video_duration "$duration_sec" '
             {
                 schema_version: $schema_version,
@@ -1224,6 +1392,9 @@ emit_home_assistant() {
                 video_playing: $video_playing,
                 youtube_playing: $youtube_playing,
                 music_app_playing: $music_app_playing,
+                music_shuffle_enabled: $music_shuffle_enabled,
+                music_shuffle_available: $music_shuffle_available,
+                music_next_track: $music_next_track,
                 total_videos_watched: $total_videos_watched,
                 high_score: $high_score,
                 video_duration: $video_duration,
@@ -1415,6 +1586,7 @@ while true; do
     immediate_poll_requested="false"
     loop_start_ms=$(timestamp_ms)
     loop_now_epoch=$(epoch_now)
+    quicklook_media_kind=""
     read_local_activity
     if [[ "$local_computer_active" != "true" ]]; then
         # On a real active -> inactive transition, publish one final idle media
@@ -1490,7 +1662,8 @@ while true; do
     # SENSOR READ — VLC fallback
     # ========================================================
     vlc_poll_ms=0
-    if [[ "$music_playing" != "true" && "$youtube_playing" != "true" ]]; then
+    if [[ "$music_playing" != "true" && "$youtube_playing" != "true" &&
+          "$btt_media_source" != "quicklook" ]]; then
         if pgrep -x "VLC" >/dev/null 2>&1; then
             debugecho "DEBUG VLC running. Checking VLC..."
             timing_start_ms=$(timestamp_ms)

@@ -109,10 +109,10 @@ on try_cached_advance()
  try
 	set inventoryPath to (POSIX path of (path to home folder)) & "NowPlaying/cache/browser-inventory.json"
   -- The inventory refreshes every 8-30 seconds. A recent paused tab remains a
-  -- valid source for five minutes, but only while the complete live queue still
+  -- valid source for fifteen minutes, but only while the complete live queue still
   -- matches this snapshot below.
   set activeURL to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 120) | select(.active.browser==\"Safari\") | .active.url // empty' " & quoted form of inventoryPath
-  set queueText to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 90) | .tabs[] | select(.browser==\"Safari\" and .is_youtube_video==true) | [.window_id,.tab_index,.url,(.media_metadata.playing//false),(.media_metadata.paused//false),(.media_metadata.last_playback_at_ms//0),(((.media_metadata.last_playback_at_ms//0)>0) and ((now*1000-(.media_metadata.last_playback_at_ms//0))<=300000))] | @tsv' " & quoted form of inventoryPath
+  set queueText to do shell script "/usr/bin/jq -r 'select((now-(.updated_at//0)) < 90) | .tabs[] | select(.browser==\"Safari\" and .is_youtube_video==true) | [.window_id,.tab_index,.url,(.media_metadata.playing//false),(.media_metadata.paused//false),(.media_metadata.last_playback_at_ms//0),(((.media_metadata.last_playback_at_ms//0)>0) and ((now*1000-(.media_metadata.last_playback_at_ms//0))<=900000))] | @tsv' " & quoted form of inventoryPath
   if queueText is "" then return ""
  on error
   return ""

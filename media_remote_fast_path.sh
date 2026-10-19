@@ -77,6 +77,36 @@ case "$effective_bundle_id" in
         media_source="vlc"
         music_playing=false
         video_playing=true
+        media_status_hint="Video"
+        ;;
+    com.apple.quicklook.QuickLookUIService|com.apple.quicklook.*)
+        media_source="quicklook"
+        music_playing=false
+        video_playing=false
+        media_status_hint="Playing"
+        quicklook_path=""
+        while IFS= read -r quicklook_pid; do
+            [[ "$quicklook_pid" =~ ^[0-9]+$ ]] || continue
+            quicklook_path=$(/usr/sbin/lsof -Fn -p "$quicklook_pid" 2>/dev/null |
+                /usr/bin/sed -n 's/^n//p' |
+                /usr/bin/grep -Ei '\.(mp3|m4a|aac|wav|aif|aiff|flac|alac|ogg|opus|wma|mp4|m4v|mov|mkv|avi|webm|mpeg|mpg|mjpeg|mjpg)$' |
+                /usr/bin/tail -n 1)
+            [[ -n "$quicklook_path" ]] && break
+        done < <(/usr/bin/pgrep -f 'QuickLookUIService\.xpc/Contents/MacOS/QuickLookUIService' 2>/dev/null)
+        quicklook_ext="${quicklook_path##*.}"
+        quicklook_ext=$(printf '%s' "$quicklook_ext" | /usr/bin/tr '[:upper:]' '[:lower:]')
+        case "$quicklook_ext" in
+            mp3|m4a|aac|wav|aiff|aif|flac|alac|ogg|opus|wma)
+                music_playing=true
+                media_status_hint="Music" ;;
+            mp4|m4v|mov|mkv|avi|webm|mpeg|mpg|mjpeg|mjpg)
+                video_playing=true
+                media_status_hint="Video" ;;
+        esac
+        if [[ -n "$quicklook_path" ]]; then
+            title=$(/usr/bin/basename "$quicklook_path")
+            title="${title%.*}"
+        fi
         ;;
     com.apple.Safari|com.google.Chrome|com.google.Chrome.*)
         media_source="browser"
@@ -91,7 +121,7 @@ case "$effective_bundle_id" in
 esac
 
 if [[ "$playing" == "true" ]]; then
-    media_status="Playing"
+    media_status="${media_status_hint:-Playing}"
     [[ -n "$title" ]] || title="Loading media…"
     [[ -n "$artist" ]] || artist="${app_name:-Detecting source…}"
 else

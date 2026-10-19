@@ -94,9 +94,14 @@ on is_media_url(theURL)
 	set u to theURL as string
 	set parsedHost to my hostname_from_url(u)
 	if parsedHost is "" then return false
-	-- A YouTube home/search page may contain autoplaying previews, but it is not
-	-- a controllable now-playing target. Only real video routes qualify.
-	if (parsedHost is "youtube.com" or parsedHost ends with ".youtube.com") and not (u contains "/watch" or u contains "/shorts/") then return false
+	-- Keep the YouTube homepage eligible because its real miniplayer overlay can
+	-- continue an audible video there. The in-page probe below distinguishes that
+	-- player from muted hover previews. Search/feed subpages remain ineligible.
+	if parsedHost is "youtube.com" or parsedHost ends with ".youtube.com" then
+		set isDedicatedVideo to (u contains "/watch" or u contains "/shorts/")
+		set isHomepage to (u ends with "youtube.com" or u ends with "youtube.com/")
+		if not isDedicatedVideo and not isHomepage then return false
+	end if
 	set mediaHosts to {"youtube.com", "youtu.be", "netflix.com", "hulu.com", "disneyplus.com", "max.com", "hbomax.com", "primevideo.com", "tv.apple.com", "peacocktv.com", "paramountplus.com", "twitch.tv", "vimeo.com", "dailymotion.com", "crunchyroll.com", "tubi.tv", "pluto.tv", "spotify.com", "music.apple.com", "music.amazon.com", "soundcloud.com", "pandora.com", "tidal.com", "deezer.com", "bandcamp.com", "app.plex.tv"}
 	repeat with mediaHost in mediaHosts
 		set allowedHost to mediaHost as string
@@ -211,11 +216,19 @@ with timeout of 12 seconds
 		" const ms=navigator.mediaSession||null;" & linefeed & ¬
 		" const msPlaying=!!ms&&ms.playbackState==='playing';" & linefeed & ¬
 		"" & linefeed & ¬
+		" const youtubeAudiblePlaying=media.some(m=>" & linefeed & ¬
+		"   !m.paused&&!m.ended&&m.readyState>=2&&m.muted!==true&&m.defaultMuted!==true&&(!Number.isFinite(m.volume)||m.volume>0)" & linefeed & ¬
+		" );" & linefeed & ¬
+		" const homepagePlayer=ytHomepage&&ps===1&&media.some(m=>" & linefeed & ¬
+		"   mp&&mp.contains(m)&&" & linefeed & ¬
+		"   !m.paused&&!m.ended&&m.readyState>=2&&m.muted!==true&&m.defaultMuted!==true&&(!Number.isFinite(m.volume)||m.volume>0)&&" & linefeed & ¬
+		"   Number.isFinite(m.duration)&&m.duration>=60&&m.currentTime>0" & linefeed & ¬
+		" );" & linefeed & ¬
 		" const playing=" & linefeed & ¬
 		"   ytHomepage" & linefeed & ¬
-		"     ? false" & linefeed & ¬
+		"     ? homepagePlayer" & linefeed & ¬
 		"     : isYT" & linefeed & ¬
-		"       ? ((ps===1)||htmlPlaying)" & linefeed & ¬
+		"       ? ((ps===1)||youtubeAudiblePlaying)" & linefeed & ¬
 		"       : (htmlPlaying||msPlaying);" & linefeed & ¬
 		"" & linefeed & ¬
 		" let fullscreen=false;" & linefeed & ¬
@@ -875,8 +888,6 @@ with timeout of 12 seconds
 		"   /(^|\\.)youtube\\.com$/.test(host)&&" & linefeed & ¬
 		"   location.pathname==='/';" & linefeed & ¬
 		"" & linefeed & ¬
-		" if(isYoutubeHomepage)return emptyResult();" & linefeed & ¬
-		"" & linefeed & ¬
 		" const isShorts=" & linefeed & ¬
 		"   isYoutube&&location.pathname.startsWith('/shorts/');" & linefeed & ¬
 		"" & linefeed & ¬
@@ -1057,14 +1068,19 @@ with timeout of 12 seconds
 		" const initialVideoId=initialVD.videoId||'';" & linefeed & ¬
 		"" & linefeed & ¬
 		" const playerDataMatchesCurrent=" & linefeed & ¬
-		"   !!urlVideoId&&!!playerVDId&&playerVDId===urlVideoId;" & linefeed & ¬
+		"   isYoutubeHomepage?!!playerVDId:" & linefeed & ¬
+		"   (!!urlVideoId&&!!playerVDId&&playerVDId===urlVideoId);" & linefeed & ¬
 		" const playerResponseMatchesCurrent=" & linefeed & ¬
-		"   !!urlVideoId&&!!playerResponseVideoId&&playerResponseVideoId===urlVideoId;" & linefeed & ¬
+		"   isYoutubeHomepage" & linefeed & ¬
+		"     ? (!!playerVDId&&!!playerResponseVideoId&&playerResponseVideoId===playerVDId)" & linefeed & ¬
+		"     : (!!urlVideoId&&!!playerResponseVideoId&&playerResponseVideoId===urlVideoId);" & linefeed & ¬
 		" const playerResponseHasDescription=" & linefeed & ¬
 		"   playerResponseMatchesCurrent&&typeof playerResponseVD.shortDescription==='string';" & linefeed & ¬
 		"" & linefeed & ¬
 		" const initialDataMatchesCurrent=" & linefeed & ¬
-		"   !!urlVideoId&&!!initialVideoId&&initialVideoId===urlVideoId;" & linefeed & ¬
+		"   isYoutubeHomepage" & linefeed & ¬
+		"     ? (!!playerVDId&&!!initialVideoId&&initialVideoId===playerVDId)" & linefeed & ¬
+		"     : (!!urlVideoId&&!!initialVideoId&&initialVideoId===urlVideoId);" & linefeed & ¬
 		"" & linefeed & ¬
 		" const video_id=isShorts" & linefeed & ¬
 		"   ? urlVideoId" & linefeed & ¬
@@ -1363,9 +1379,18 @@ with timeout of 12 seconds
 		" );" & linefeed & ¬
 		"" & linefeed & ¬
 		" const youtubeActuallyPlaying=playerState===1;" & linefeed & ¬
+		" const youtubeAudiblePlaying=media.some(m=>" & linefeed & ¬
+		"   !m.paused&&!m.ended&&m.readyState>=2&&m.muted!==true&&m.defaultMuted!==true&&(!Number.isFinite(m.volume)||m.volume>0)" & linefeed & ¬
+		" );" & linefeed & ¬
+		" const ytHomepage=isYoutube&&location.pathname==='/';" & linefeed & ¬
+		" const homepagePlayer=ytHomepage&&youtubeActuallyPlaying&&media.some(m=>" & linefeed & ¬
+		"   mp&&mp.contains(m)&&" & linefeed & ¬
+		"   !m.paused&&!m.ended&&m.readyState>=2&&m.muted!==true&&m.defaultMuted!==true&&(!Number.isFinite(m.volume)||m.volume>0)&&" & linefeed & ¬
+		"   Number.isFinite(m.duration)&&m.duration>=60&&m.currentTime>0" & linefeed & ¬
+		" );" & linefeed & ¬
 		"" & linefeed & ¬
 		" const playing=isYoutube" & linefeed & ¬
-		"     ? (youtubeActuallyPlaying||html5Playing)" & linefeed & ¬
+		"     ? (ytHomepage?homepagePlayer:(youtubeActuallyPlaying||youtubeAudiblePlaying))" & linefeed & ¬
 		"     : (html5Playing||mediaSessionPlaying);" & linefeed & ¬
 		"" & linefeed & ¬
 		" const playerClasses=mp?.className||'';" & linefeed & ¬

@@ -14,6 +14,9 @@ assert 'find_playing_youtube_tab' in source, 'Next action must adopt Safari auto
 assert source.index('find_playing_youtube_tab()') < source.index('v.play().catch'), 'Autoplay handoff must be checked before requesting play'
 assert "player.pauseVideo()" in control_source, 'Queued launches must explicitly pause YouTube players'
 assert "media.webkitExitFullscreen()" in control_source, 'Queued launches must exit native video fullscreen'
+play_video_id = control_source[control_source.index('on play_video_id('):control_source.index('end play_video_id')]
+assert 'repeat with wi from 1 to count of windows' in play_video_id, 'Queued launches must recover from stale cached window indices'
+assert 'liveURL contains videoID' in play_video_id, 'Queued launches must relocate the requested video by its stable ID'
 play_target = control_source[control_source.index('on play_target('):control_source.index('end play_target')]
 assert play_target.index('my pause_competing_media()') < play_target.index('set current tab of w to t'), 'Competing media must pause before selecting a queued Safari tab'
 assert play_target.index('my pause_competing_media()') < play_target.index('set active tab index of w to index of t'), 'Competing media must pause before selecting a queued Chrome tab'
