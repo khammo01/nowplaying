@@ -111,6 +111,31 @@ request_immediate_poll() {
 }
 trap request_immediate_poll SIGUSR1
 trap cleanup_lock EXIT
+
+wait_for_command_or_timeout() {
+    local wait_seconds="${1%%.*}" key_pressed=""
+    [[ "$wait_seconds" =~ ^[0-9]+$ ]] || wait_seconds=1
+    (( wait_seconds >= 1 )) || wait_seconds=1
+    if IFS= read -r -n 1 -t "$wait_seconds" key_pressed; then
+        case "$key_pressed" in
+            ''|r|R)
+                immediate_poll_requested="true"
+                ;;
+            x|X)
+                echo ""
+                echo "Restarting NowPlaying..."
+                cleanup_lock
+                exec /bin/bash "$NOWPLAYING_ROOT/NowPlaying.sh"
+                ;;
+            q|Q)
+                : > "$CACHE_ROOT/nowplaying-user-stopped"
+                echo ""
+                echo "NowPlaying stopped by user."
+                exit 0
+                ;;
+        esac
+    fi
+}
 # Timing & Thresholds
 # ============================================================
 
@@ -1495,7 +1520,7 @@ print_description_lines() {
 # ============================================================
 
 emit_cli() {
-    nodebug printf '\e[8;28;82t'
+    nodebug printf '\e[8;29;82t'
     nodebug printf '\033[H\033[J'
     printf '\n\n\n'
     if [[ "$music_playing" == "true" ]]; then
@@ -1565,6 +1590,7 @@ emit_cli() {
     # printf "     Timing: Music %dms | Browser %dms | VLC %dms | HA %dms | Sleep %dms\n" "$profile_music_ms" "$profile_browser_ms" "$profile_vlc_ms" "$profile_ha_network_ms" "$profile_sleep_ms"
     echo "     NowPlaying: $nowplaying_version | Updated $(nowplaying_updated_relative)"
     echo ""
+    echo "  [Return/R] Refresh     [X] Restart     [Q] Quit"
 }
 
 
@@ -1603,13 +1629,12 @@ while true; do
             echo ""
             echo "     Media polling suspended: $local_activity_reason"
             echo "     Activity heartbeat remains online."
+            echo ""
+            echo "  [Return/R] Refresh     [X] Restart     [Q] Quit"
         fi
         next_check_interval="$LOCAL_INACTIVE_CHECK_INTERVAL"
         check_for_self_update
-        sleep "$LOCAL_INACTIVE_CHECK_INTERVAL" &
-        sleep_pid=$!
-        wait "$sleep_pid" 2>/dev/null || true
-        sleep_pid=""
+        wait_for_command_or_timeout "$LOCAL_INACTIVE_CHECK_INTERVAL"
         continue
     fi
     media_remote_json=$(read_media_remote_defaults)
@@ -1795,13 +1820,11 @@ PY
     [[ "$immediate_poll_requested" == "true" ]] && sleep_ms=0
     profile_sleep_ms="$sleep_ms"
     if (( sleep_ms > 0 )); then
-        sleep "$(python3 - "$sleep_ms" <<'PY'
+        sleep_seconds="$(python3 - "$sleep_ms" <<'PY'
 import sys
 print(int(sys.argv[1]) / 1000)
 PY
-)" &
-        sleep_pid=$!
-        wait "$sleep_pid" 2>/dev/null || true
-        sleep_pid=""
+)"
+        wait_for_command_or_timeout "$sleep_seconds"
     fi
 done
