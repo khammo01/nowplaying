@@ -72,9 +72,12 @@ def exact_youtube_resume() -> str:
     )
 
 COMMANDS = {
-    "playpause_toggle": READ_SOURCE + detached(f'{ROOT}/media_command.sh playpause "$source"'),
-    "mac_studio_next_song": READ_SOURCE + detached(f'{ROOT}/media_command.sh next "$source"'),
-    "mac_mini_previous_song": READ_SOURCE + detached(f'{ROOT}/media_command.sh previous "$source"'),
+    # Transport presses can arrive much faster than AppleScript can safely
+    # address Music or a browser tab. Preserve every press and execute them in
+    # order through one worker instead of launching overlapping AppleEvents.
+    "playpause_toggle": READ_SOURCE + f'{ROOT}/media_command_queue.py playpause "$source"',
+    "mac_studio_next_song": READ_SOURCE + f'{ROOT}/media_command_queue.py next "$source"',
+    "mac_mini_previous_song": READ_SOURCE + f'{ROOT}/media_command_queue.py previous "$source"',
     "mac_studio_open_youtube": youtube_detached("open"),
     "mac_youtube_play": youtube_detached("play"),
     "mac_youtube_surprise_me": youtube_detached("surprise"),
