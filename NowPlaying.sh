@@ -1522,6 +1522,9 @@ print_description_lines() {
 emit_cli() {
     nodebug printf '\e[8;29;82t'
     nodebug printf '\033[H\033[J'
+    local poll_time_seconds="${last_polled_time%%.*}"
+    local ha_time_seconds="${last_ha_update_time_local%%.*}"
+    nodebug printf '\033]0;NagBot NowPlaying — %s — %s\007' "$media_status" "$poll_time_seconds"
     printf '\n\n\n'
     if [[ "$music_playing" == "true" ]]; then
         printf '\n\n\n'
@@ -1585,12 +1588,10 @@ emit_cli() {
         printf '\n\n\n\n\n\n\n'
     fi
     echo "  -------------------------------------------------------------------"
-    printf "     Last Polled Time: %-12s | Check Interval: %ss\n" "$last_polled_time" "$next_check_interval"
-    echo "     Last HA Update Time: $last_ha_update_time_local"
+    printf "     Poll %-8s | HA %-8s | Every %ss | v%s\n" \
+        "$poll_time_seconds" "$ha_time_seconds" "$next_check_interval" "$nowplaying_version"
     # printf "     Timing: Music %dms | Browser %dms | VLC %dms | HA %dms | Sleep %dms\n" "$profile_music_ms" "$profile_browser_ms" "$profile_vlc_ms" "$profile_ha_network_ms" "$profile_sleep_ms"
-    echo "     NowPlaying: $nowplaying_version | Updated $(nowplaying_updated_relative)"
-    echo ""
-    echo "  [Return/R] Refresh     [X] Restart     [Q] Quit"
+    echo "     [Return/R] Refresh     [X] Restart     [Q] Quit"
 }
 
 
@@ -1630,7 +1631,7 @@ while true; do
             echo "     Media polling suspended: $local_activity_reason"
             echo "     Activity heartbeat remains online."
             echo ""
-            echo "  [Return/R] Refresh     [X] Restart     [Q] Quit"
+            echo "     [Return/R] Refresh     [X] Restart     [Q] Quit"
         fi
         next_check_interval="$LOCAL_INACTIVE_CHECK_INTERVAL"
         check_for_self_update
