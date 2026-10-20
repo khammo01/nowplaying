@@ -28,7 +28,7 @@ end inventory_path
 
 on read_cached_target()
 	try
-		set cacheText to do shell script "/usr/bin/jq -r 'if (.active.browser // \"\") != \"\" then [.active.browser,.active.window_index,.active.tab_index,.active.url] | join(\"|\") else empty end' " & quoted form of my inventory_path()
+		set cacheText to do shell script "/usr/bin/jq -r '(.active // (if ((now-(.recent_active.last_confirmed_at//0)) <= 900) then .recent_active else null end)) as $t | if ($t.browser // \"\") != \"\" then [$t.browser,$t.window_index,$t.tab_index,$t.url] | join(\"|\") else empty end' " & quoted form of my inventory_path()
 		set cacheParts to my split_pipe(cacheText)
 		if (count of cacheParts) ≥ 4 then return {item 1 of cacheParts, (item 2 of cacheParts as integer), (item 3 of cacheParts as integer), item 4 of cacheParts}
 	on error
@@ -191,6 +191,14 @@ on run argv
 		return my javascript_on_target(targetParts, captionsJS)
 	end if
 
+	-- Toggle the resolved video's player directly. This avoids depending on
+	-- macOS MediaRemote, which Safari may drop while a YouTube tab continues
+	-- playing, and avoids changing the frontmost app just to send the "k" key.
+	if commandName is "playpause" then
+		set playPauseJS to "(() => { const p=document.getElementById('movie_player'),v=document.querySelector('video'); try { if(p&&typeof p.getPlayerState==='function'){ const s=p.getPlayerState(); if(s===1){p.pauseVideo();return 'paused';} if((s===0||s===5)&&typeof p.seekTo==='function')p.seekTo(0,true); p.playVideo();return 'playing'; } if(!v)return 'no-video'; if(v.paused||v.ended){if(v.ended)v.currentTime=0;const r=v.play();if(r&&typeof r.catch==='function')r.catch(()=>{});return 'playing';} v.pause();return 'paused'; } catch(e){return 'error:'+String(e); } })()"
+		return my javascript_on_target(targetParts, playPauseJS)
+	end if
+
 	-- Exit fullscreen directly inside the tab. A System Events "f" keystroke
 	-- can first move macOS back to the browser's normal Space while Safari
 	-- leaves the video playing in its fullscreen Space. Safari still requires a
@@ -214,8 +222,6 @@ on run argv
 
 	if commandName is "fullscreen" then
 		tell application "System Events" to keystroke "f"
-	else if commandName is "playpause" then
-		tell application "System Events" to keystroke "k"
 	else
 		error "Unknown YouTube command: " & commandName
 	end if

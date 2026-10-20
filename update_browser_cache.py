@@ -65,12 +65,32 @@ def main() -> int:
             )
 
     now = time.time()
+    if active:
+        recent_active = active
+    else:
+        recent_active = previous.get("active") or previous.get("recent_active")
+        if recent_active:
+            match = next(
+                (
+                    tab
+                    for tab in tabs
+                    if tab.get("browser") == recent_active.get("browser")
+                    and tab.get("url") == recent_active.get("url")
+                ),
+                None,
+            )
+            recent_active = (
+                {**match, "last_confirmed_at": recent_active.get("last_confirmed_at", 0)}
+                if match
+                else None
+            )
     payload = {
         "schema": 1,
         "generation": int(previous.get("generation", 0)) + 1,
         "updated_at": now,
         "updated_at_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
         "active": active,
+        "recent_active": recent_active,
         "tabs": tabs,
         "counts": {
             "media": sum(bool(tab.get("is_media_page")) for tab in tabs),

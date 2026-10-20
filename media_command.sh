@@ -34,7 +34,15 @@ fi
 
 case "$media_source:$command_name" in
   *:system_playpause)
-    /opt/homebrew/bin/nowplaying-cli togglePlayPause
+    # Safari sometimes drops its macOS MediaRemote session while YouTube is
+    # still active. Prefer the exact cached YouTube tab in that case; all
+    # other sources retain the ordinary system media-key behavior.
+    if /usr/bin/jq -e '(.active // (if ((now-(.recent_active.last_confirmed_at//0)) <= 900) then .recent_active else null end)) | .is_youtube_video == true and ((.browser // "") != "")' \
+      "$root/cache/browser-inventory.json" >/dev/null 2>&1; then
+      /usr/bin/osascript "$root/youtube_target_command.applescript" playpause
+    else
+      /opt/homebrew/bin/nowplaying-cli togglePlayPause
+    fi
     ;;
   youtube:playpause|youtube:fullscreen|youtube:captions|youtube:slower|youtube:faster)
     /usr/bin/osascript "$root/youtube_target_command.applescript" "$command_name" "$value"

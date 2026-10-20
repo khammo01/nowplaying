@@ -60,4 +60,15 @@ with tempfile.TemporaryDirectory() as temp_dir:
     assert second["generation"] == 2
     assert second["active"]["url"].endswith("active")
 
+    legacy.unlink()
+    subprocess.run(
+        [str(ROOT / "update_browser_cache.py"), str(cache), str(legacy)],
+        input=json.dumps(tabs[:1]),
+        text=True,
+        check=True,
+    )
+    third = json.loads(cache.read_text())
+    assert third["active"] is None
+    assert third["recent_active"]["url"].endswith("active")
+
 print("Browser cache checks passed.")
