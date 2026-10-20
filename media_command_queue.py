@@ -16,6 +16,7 @@ import uuid
 ROOT = Path(__file__).resolve().parent
 QUEUE = ROOT / "cache" / "media-command-queue"
 LOCK = ROOT / "cache" / "media-command-worker.lock"
+LOG = ROOT / "cache" / "btt-media-actions.log"
 
 
 def enqueue(arguments: list[str]) -> None:
@@ -68,6 +69,17 @@ def main() -> int:
         os.setsid()
         second_pid = os.fork()
         if second_pid == 0:
+            # Fully detach from BetterTouchTool's HTTP response pipe. Without
+            # this, the request stays open until every queued AppleEvent has
+            # completed, so Home Assistant can report a timeout even though
+            # the media command eventually succeeds.
+            devnull_fd = os.open(os.devnull, os.O_RDONLY)
+            log_fd = os.open(LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+            os.dup2(devnull_fd, 0)
+            os.dup2(log_fd, 1)
+            os.dup2(log_fd, 2)
+            os.close(devnull_fd)
+            os.close(log_fd)
             drain()
             os._exit(0)
         os._exit(0)
