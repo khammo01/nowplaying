@@ -1,11 +1,8 @@
--- Bring Microsoft Teams forward before sending its native mute shortcut.
--- This makes the rotary meeting control independent of whichever app was
--- active when the button was pressed.
+-- Toggle the microphone through SoundSource's global Command-Shift-M shortcut.
+-- Do not activate Teams or disturb the user's frontmost window.
 
-tell application "Microsoft Teams" to activate
-delay 0.25
 tell application "System Events"
 	keystroke "m" using {command down, shift down}
 end tell
 
-return "OK|Toggled Teams microphone"
+return "OK|Toggled microphone with the global SoundSource shortcut"
