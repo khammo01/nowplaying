@@ -185,7 +185,6 @@ LOCAL_INACTIVE_CHECK_INTERVAL="${LOCAL_INACTIVE_CHECK_INTERVAL:-1}"
 music_poll_ms=0; browser_poll_ms=0; vlc_poll_ms=0; ha_network_ms=0; loop_work_ms=0; sleep_ms=0; profile_music_ms=0
 profile_browser_ms=0; profile_vlc_ms=0; profile_ha_network_ms=0; profile_sleep_ms=0
 
-nowplaying_version=$(git -C "$NOWPLAYING_ROOT" describe --always --dirty 2>/dev/null || printf 'unknown')
 nowplaying_updated_epoch=$(git -C "$NOWPLAYING_ROOT" log -1 --format=%ct 2>/dev/null || printf '0')
 
 nowplaying_updated_relative() {
@@ -339,7 +338,7 @@ draw_startup_screen() {
     printf '\n\n\n\n\n\n\n'
     echo "  -------------------------------------------------------------------"
     echo "     Last Polled Time: --:--:--.--- | Check Interval: --"; echo "     Last HA Update Time: --:--:--.---"
-    echo "     NowPlaying: $nowplaying_version | Updated $(nowplaying_updated_relative)"; echo ""
+    echo "     Updated $(nowplaying_updated_relative) | Up to date"; echo ""
 }
 
 
@@ -1588,8 +1587,9 @@ emit_cli() {
         printf '\n\n\n\n\n\n\n'
     fi
     echo "  -------------------------------------------------------------------"
-    printf "     Poll %-8s | HA %-8s | Every %ss | v%s\n" \
-        "$poll_time_seconds" "$ha_time_seconds" "$next_check_interval" "$nowplaying_version"
+    printf "     Poll %-8s | HA %-8s | Every %ss\n" \
+        "$poll_time_seconds" "$ha_time_seconds" "$next_check_interval"
+    printf "     Updated %s | Up to date\n" "$(nowplaying_updated_relative)"
     # printf "     Timing: Music %dms | Browser %dms | VLC %dms | HA %dms | Sleep %dms\n" "$profile_music_ms" "$profile_browser_ms" "$profile_vlc_ms" "$profile_ha_network_ms" "$profile_sleep_ms"
     echo "     [Return/R] Refresh     [X] Restart     [Q] Quit"
 }
