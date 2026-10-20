@@ -173,6 +173,7 @@ last_known_youtube_active="false"; last_music_artwork_hash=""; last_music_artwor
 last_ha_update_time_utc=""; last_ha_update_time_local="--:--:--.---"; last_emitted_state=""; last_idle_bucket=""
 current_idle_bucket=""; last_emitted_queue_signature=""; last_successful_ha_emit_epoch=0; force_emit_this_poll="false"
 artwork_version=""
+artwork_url=""; controller_artwork_url=""
 local_computer_active="true"; local_computer_locked="false"; local_display_asleep="false"; local_idle_seconds=0
 local_activity_reason="active"; last_local_computer_active=""; local_activity_changed="false"
 LOCAL_INACTIVE_CHECK_INTERVAL="${LOCAL_INACTIVE_CHECK_INTERVAL:-1}"
@@ -299,9 +300,13 @@ clean_track_name() {
     '
 }
 send_artwork() {
-    local source_file="$1" hash remote_temp controller_remote_temp
+    local source_file="$1" hash remote_temp controller_remote_temp source_slug source_remote_temp controller_source_remote_temp
     local publish_file="/tmp/nowplaying_artwork_publish.jpg"
     local controller_file="/tmp/nowplaying_artwork_controller.jpg"
+    # Keep a source-specific copy so a non-selected Mac cannot overwrite the
+    # artwork paired with Home Assistant's selected title/last-track record.
+    source_slug=$(printf '%s' "$SOURCE_DEVICE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+    [[ -n "$source_slug" ]] || source_slug="unknown-mac"
     # Music.app frequently returns PNG artwork even though the shared HA path
     # has a .jpg suffix. Normalize every source to a compact, genuine JPEG so
     # small clients (including the rotary controller) can decode it quickly.
@@ -315,11 +320,17 @@ send_artwork() {
     [[ -n "$hash" ]] || return 1
     remote_temp="/config/www/nowplaying/.artwork.${hash}.$$.tmp"
     controller_remote_temp="/config/www/nowplaying/.controller-artwork.${hash}.$$.tmp"
+    source_remote_temp="/config/www/nowplaying/.artwork-${source_slug}.${hash}.$$.tmp"
+    controller_source_remote_temp="/config/www/nowplaying/.controller-artwork-${source_slug}.${hash}.$$.tmp"
     scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$publish_file" "$HA_SERVER:$remote_temp" || return 1
     scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$controller_file" "$HA_SERVER:$controller_remote_temp" || return 1
+    scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$publish_file" "$HA_SERVER:$source_remote_temp" || return 1
+    scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$controller_file" "$HA_SERVER:$controller_source_remote_temp" || return 1
     ssh -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$HA_SERVER" \
-        "mv '$remote_temp' /config/www/nowplaying/artwork.jpg && mv '$controller_remote_temp' /config/www/nowplaying/controller-artwork.jpg" || return 1
+        "mv '$remote_temp' /config/www/nowplaying/artwork.jpg && mv '$controller_remote_temp' /config/www/nowplaying/controller-artwork.jpg && mv '$source_remote_temp' '/config/www/nowplaying/artwork-${source_slug}.jpg' && mv '$controller_source_remote_temp' '/config/www/nowplaying/controller-artwork-${source_slug}.jpg'" || return 1
     artwork_version="$hash"
+    artwork_url="/local/nowplaying/artwork-${source_slug}.jpg?v=${hash}"
+    controller_artwork_url="/local/nowplaying/controller-artwork-${source_slug}.jpg?v=${hash}"
 }
 
 
@@ -1381,7 +1392,7 @@ emit_home_assistant() {
             --arg track "$track" --arg artist "$artist" --arg album "$album" --arg genre "$genre" --arg year "$year" --arg summary "$summary" --arg description "$description" \
             --arg view_count "$view_count" --arg published_date "$published_date" --arg subscriber_count "$subscriber_count" \
             --arg media_status "$media_status" --arg currentTime "$currentTimehms" --arg duration "$duration_hms" --arg playback_speed "$playback_speed" \
-            --arg playlist "$playlist_name" --arg progress_bar_full "$progress_bar_full" --arg url "$url" --arg video_id "$video_id" --arg thumbnail "$thumbnail_url" --arg artwork_version "$artwork_version" \
+            --arg playlist "$playlist_name" --arg progress_bar_full "$progress_bar_full" --arg url "$url" --arg video_id "$video_id" --arg thumbnail "$thumbnail_url" --arg artwork_version "$artwork_version" --arg artwork_url "$artwork_url" --arg controller_artwork_url "$controller_artwork_url" \
             --argjson schema_version "$PAYLOAD_SCHEMA_VERSION" \
             --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson video_playing "$reported_video_playing" --argjson youtube_playing "$reported_youtube_playing" \
             --argjson volume_percent "$volume_percent" \
@@ -1431,7 +1442,9 @@ emit_home_assistant() {
                 url: $url,
                 video_id: $video_id,
                 thumbnail: $thumbnail,
-                artwork_version: $artwork_version
+                artwork_version: $artwork_version,
+                artwork_url: $artwork_url,
+                controller_artwork_url: $controller_artwork_url
             }
             '
     )
