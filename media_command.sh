@@ -33,6 +33,9 @@ if [[ -z "$media_source" || "$media_source" == "unknown" ]]; then
 fi
 
 case "$media_source:$command_name" in
+  *:system_playpause)
+    /opt/homebrew/bin/nowplaying-cli togglePlayPause
+    ;;
   youtube:playpause|youtube:fullscreen|youtube:captions|youtube:slower|youtube:faster)
     /usr/bin/osascript "$root/youtube_target_command.applescript" "$command_name" "$value"
     ;;

@@ -75,7 +75,7 @@ COMMANDS = {
     # Transport presses can arrive much faster than AppleScript can safely
     # address Music or a browser tab. Preserve every press and execute them in
     # order through one worker instead of launching overlapping AppleEvents.
-    "playpause_toggle": READ_SOURCE + f'{ROOT}/media_command_queue.py playpause "$source"',
+    "playpause_toggle": f"{ROOT}/media_command_queue.py system_playpause",
     "mac_studio_next_song": READ_SOURCE + f'{ROOT}/media_command_queue.py next "$source"',
     "mac_mini_previous_song": READ_SOURCE + f'{ROOT}/media_command_queue.py previous "$source"',
     "mac_studio_open_youtube": youtube_detached("open"),
