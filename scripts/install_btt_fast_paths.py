@@ -141,6 +141,10 @@ NEW_TRIGGERS = {
         f"/usr/bin/osascript {ROOT}/teams_mute_state.applescript"
     ),
     "mac_youtube_play_cached": exact_youtube_resume(),
+    # Both Macs receive the same exact-video fast path. Home Assistant's
+    # Next Video script already calls this name, and queue selections use it
+    # as well. Keeping the legacy cached alias preserves older dashboards.
+    "mac_youtube_play_selected": exact_youtube_resume(),
     "media_controller_set_input_volume": (
         "target=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"meeting_input_volume\"' 2>/dev/null)\n"

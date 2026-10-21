@@ -61,37 +61,42 @@ on cached_target()
 end cached_target
 
 on pause_competing_media()
-	-- Starting a selected YouTube video is an intentional source switch. Pause
-	-- every currently playing browser media element first, including media on
-	-- non-YouTube sites, so a cached/queued launch cannot create two audio
-	-- streams. Pause YouTube through its player API as well as the HTML media
-	-- element because Safari's native fullscreen presentation can otherwise
-	-- survive a tab switch. Leave fullscreen before activating the destination.
-	-- The chosen target is played again immediately afterward.
+	-- Starting a selected YouTube video is an intentional source switch. The
+	-- inventory observer already records the exact tabs that are playing, so
+	-- pause only those tabs. Running JavaScript in every open browser tab can
+	-- take tens of seconds on a large Safari session and blocks the selection.
 	set pauseJS to "(() => {let count=0;const player=document.getElementById('movie_player');try{if(player&&typeof player.getPlayerState==='function'&&player.getPlayerState()===1&&typeof player.pauseVideo==='function'){player.pauseVideo();count++;}}catch(e){}for(const media of document.querySelectorAll('video,audio')){try{if(!media.paused&&!media.ended){media.pause();count++;}if(media.webkitDisplayingFullscreen&&typeof media.webkitExitFullscreen==='function')media.webkitExitFullscreen();}catch(e){}}try{if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});else if(document.webkitFullscreenElement&&document.webkitExitFullscreen)document.webkitExitFullscreen();}catch(e){}return String(count);})()"
-	if application "Safari" is running then
-		tell application "Safari"
-			repeat with candidateWindow in windows
-				repeat with candidateTab in tabs of candidateWindow
-					try
-						set tabURL to URL of candidateTab as text
-						if tabURL does not contain "homeassistant" and tabURL does not contain ":8123" then do JavaScript pauseJS in candidateTab
-					end try
-				end repeat
-			end repeat
-		end tell
-	end if
-	if application "Google Chrome" is running then
-		tell application "Google Chrome"
-			repeat with candidateWindow in windows
-				repeat with candidateTab in tabs of candidateWindow
-					try
-						set tabURL to URL of candidateTab as text
-						if tabURL does not contain "homeassistant" and tabURL does not contain ":8123" then execute candidateTab javascript pauseJS
-					end try
-				end repeat
-			end repeat
-		end tell
+	set playingTargets to ""
+	try
+		set query to "/usr/bin/jq -r '.tabs[] | select((.media_metadata.playing // false)==true) | [.browser,(.window_index|tostring),(.tab_index|tostring),.url] | join(\"|\")' " & quoted form of my inventory_path()
+		set playingTargets to do shell script query
+	on error
+	end try
+	if playingTargets is not "" then
+		repeat with targetLine in paragraphs of playingTargets
+			try
+				set fields to my split_pipe(targetLine as text)
+				if (count of fields) ≥ 4 then
+					set browserName to item 1 of fields
+					set windowIndex to item 2 of fields as integer
+					set tabIndex to item 3 of fields as integer
+					set expectedURL to item 4 of fields
+					if browserName is "Safari" and application "Safari" is running then
+						tell application "Safari"
+							set candidateTab to tab tabIndex of window windowIndex
+							if (URL of candidateTab as text) is expectedURL then do JavaScript pauseJS in candidateTab
+						end tell
+					else if browserName is "Google Chrome" and application "Google Chrome" is running then
+						tell application "Google Chrome"
+							set candidateTab to tab tabIndex of window windowIndex
+							if (URL of candidateTab as text) is expectedURL then execute candidateTab javascript pauseJS
+						end tell
+					end if
+				end if
+			on error
+				-- A moved/closed source tab is already no longer competing.
+			end try
+		end repeat
 	end if
 	try
 		tell application "Music" to if player state is playing then pause
