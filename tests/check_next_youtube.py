@@ -9,11 +9,19 @@ ROOT = Path(__file__).resolve().parents[1]
 source = (ROOT / 'next_youtube_video.applescript').read_text()
 control_source = (ROOT / 'youtube_control.applescript').read_text()
 wrapper = (ROOT / 'youtube_action_with_feedback.sh').read_text()
+media_command = (ROOT / 'media_command.sh').read_text()
+installer = (ROOT / 'scripts' / 'install_btt_fast_paths.py').read_text()
 assert 'cache/next-youtube.lock' in wrapper, 'Next action must prevent overlapping workers'
 assert 'find_playing_youtube_tab' in source, 'Next action must adopt Safari autoplay handoff'
 assert source.index('find_playing_youtube_tab()') < source.index('v.play().catch'), 'Autoplay handoff must be checked before requesting play'
 assert "player.pauseVideo()" in control_source, 'Queued launches must explicitly pause YouTube players'
 assert "media.webkitExitFullscreen()" in control_source, 'Queued launches must exit native video fullscreen'
+pause_competing = control_source[control_source.index('on pause_competing_media('):control_source.index('end pause_competing_media')]
+assert 'current tab of candidateWindow' in pause_competing, 'Safari selected tabs must be checked live before exact playback'
+assert 'active tab of candidateWindow' in pause_competing, 'Chrome selected tabs must be checked live before exact playback'
+assert 'exact-youtube-handoff-until' in installer, 'Exact-video BTT actions must open the duplicate-command guard'
+assert 'exact-youtube-handoff-until' in media_command, 'Generic play/pause must honor the exact-video handoff guard'
+assert media_command.index('exact-youtube-handoff-until') < media_command.index('nowplaying-cli togglePlayPause'), 'The handoff guard must run before the generic media key'
 play_video_id = control_source[control_source.index('on play_video_id('):control_source.index('end play_video_id')]
 assert 'repeat with wi from 1 to count of windows' in play_video_id, 'Queued launches must recover from stale cached window indices'
 assert 'liveURL contains videoID' in play_video_id, 'Queued launches must relocate the requested video by its stable ID'

@@ -62,10 +62,35 @@ end cached_target
 
 on pause_competing_media()
 	-- Starting a selected YouTube video is an intentional source switch. The
-	-- inventory observer already records the exact tabs that are playing, so
-	-- pause only those tabs. Running JavaScript in every open browser tab can
-	-- take tens of seconds on a large Safari session and blocks the selection.
+	-- inventory observer records tabs that were playing at its last sample, but
+	-- Safari can resume a selected tab after a long idle before that state is
+	-- visible in the cache. Pause every browser window's live selected YouTube
+	-- tab first, then cover any other playing tabs recorded by the inventory.
+	-- This remains fast because JavaScript runs on at most one live tab per
+	-- window instead of every tab in a large browser session.
 	set pauseJS to "(() => {let count=0;const player=document.getElementById('movie_player');try{if(player&&typeof player.getPlayerState==='function'&&player.getPlayerState()===1&&typeof player.pauseVideo==='function'){player.pauseVideo();count++;}}catch(e){}for(const media of document.querySelectorAll('video,audio')){try{if(!media.paused&&!media.ended){media.pause();count++;}if(media.webkitDisplayingFullscreen&&typeof media.webkitExitFullscreen==='function')media.webkitExitFullscreen();}catch(e){}}try{if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});else if(document.webkitFullscreenElement&&document.webkitExitFullscreen)document.webkitExitFullscreen();}catch(e){}return String(count);})()"
+	if application "Safari" is running then
+		tell application "Safari"
+			repeat with candidateWindow in windows
+				try
+					set candidateTab to current tab of candidateWindow
+					if my is_youtube_video(URL of candidateTab) then do JavaScript pauseJS in candidateTab
+				on error
+				end try
+			end repeat
+		end tell
+	end if
+	if application "Google Chrome" is running then
+		tell application "Google Chrome"
+			repeat with candidateWindow in windows
+				try
+					set candidateTab to active tab of candidateWindow
+					if my is_youtube_video(URL of candidateTab) then execute candidateTab javascript pauseJS
+				on error
+				end try
+			end repeat
+		end tell
+	end if
 	set playingTargets to ""
 	try
 		set query to "/usr/bin/jq -r '.tabs[] | select((.media_metadata.playing // false)==true) | [.browser,(.window_index|tostring),(.tab_index|tostring),.url] | join(\"|\")' " & quoted form of my inventory_path()

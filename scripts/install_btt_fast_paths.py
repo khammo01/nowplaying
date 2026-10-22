@@ -54,6 +54,11 @@ def exact_youtube_resume() -> str:
         "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
         'mkdir -p "$HOME/NowPlaying/cache"\n'
+        # An exact-video switch can otherwise be followed by a second generic
+        # play/pause action from the same physical press. Keep the guard short
+        # enough that an intentional later press still behaves normally.
+        'print -r -- "$(( $(/bin/date +%s) + 3 ))" '
+        '>"$HOME/NowPlaying/cache/exact-youtube-handoff-until"\n'
         '(\n'
         f'  result=$(/usr/bin/osascript {ROOT}/youtube_control.applescript play_id "$video_id" 2>&1)\n'
         '  print -r -- "$result" >>"$HOME/NowPlaying/cache/btt-media-actions.log"\n'
