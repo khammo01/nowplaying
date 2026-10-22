@@ -1365,6 +1365,7 @@ emit_home_assistant() {
     local reported_youtube_playing="$youtube_playing"
     [[ "$media_source" == "youtube" ]] || reported_youtube_playing="false"
     local youtube_queue='[]'
+    local youtube_playing_tabs='[]'
     if [[ -s "$CACHE_ROOT/browser-inventory.json" ]]; then
         youtube_queue=$(jq -c --arg active_video_id "$video_id" '
             [.tabs[]
@@ -1387,6 +1388,23 @@ emit_home_assistant() {
             | unique_by(.video_id)
             | .[:12]
         ' "$CACHE_ROOT/browser-inventory.json" 2>/dev/null || printf '[]')
+        youtube_playing_tabs=$(jq -c --arg source_device "$SOURCE_DEVICE" '
+            [.tabs[]
+             | select(.is_youtube_video == true and (.media_metadata.playing // false) == true)
+             | {
+                 source_device: $source_device,
+                 browser: (if (.browser // "") == "Google Chrome" then "Chrome" else (.browser // "") end),
+                 window_index: ((.window_index // 0) | tonumber? // 0),
+                 tab_index: ((.tab_index // 0) | tonumber? // 0),
+                 title: ((.title // "YouTube video") | sub(" - YouTube$"; "") | .[0:96]),
+                 video_id: (try (.url | capture("(?:[?&]v=|/shorts/|youtu\\.be/)(?<id>[^?&#/]+)").id) catch ""),
+                 author: ((.media_metadata.author // "YouTube") | tostring | .[0:64]),
+                 duration_sec: ((.media_metadata.duration_sec // 0) | tonumber? // 0 | floor)
+               }
+             | select(.video_id != "" and .browser != "" and .window_index > 0 and .tab_index > 0)
+             | . + {thumbnail_url: ("https://img.youtube.com/vi/" + .video_id + "/mqdefault.jpg")}
+            ]
+        ' "$CACHE_ROOT/browser-inventory.json" 2>/dev/null || printf '[]')
     fi
     local sent_at event_id
     sent_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -1401,6 +1419,7 @@ emit_home_assistant() {
             --argjson idle_duration "$idle_duration" --argjson playback_position_percent "$playback_position_percent" --argjson video_playing "$reported_video_playing" --argjson youtube_playing "$reported_youtube_playing" \
             --argjson volume_percent "$volume_percent" \
             --argjson youtube_queue "$youtube_queue" \
+            --argjson youtube_playing_tabs "$youtube_playing_tabs" \
             --argjson music_app_playing "$music_playing" --argjson music_shuffle_enabled "$music_shuffle_enabled" --argjson music_shuffle_available "$music_shuffle_available" --arg music_next_track "$music_next_track" --argjson total_videos_watched "$youtube_video_count" --argjson high_score "$high_score" \
             --argjson video_duration "$duration_sec" '
             {
@@ -1420,6 +1439,9 @@ emit_home_assistant() {
                 subscriber_count: $subscriber_count,
                 youtube_queue: $youtube_queue,
                 youtube_queue_json: ({items: $youtube_queue} | tojson),
+                youtube_playing_tabs: $youtube_playing_tabs,
+                youtube_playing_count: ($youtube_playing_tabs | length),
+                youtube_playing_tabs_json: ({items: $youtube_playing_tabs} | tojson),
                 media_status: $media_status,
                 media_source: $media_source,
                 idle_duration: $idle_duration,

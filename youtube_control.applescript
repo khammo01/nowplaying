@@ -8,6 +8,10 @@ on run argv
 	if actionName is "open" then return my open_youtube()
 	if actionName is "surprise" then return my surprise_me()
 	if actionName is "play_id" and (count of argv) > 1 then return my play_video_id(item 2 of argv)
+	if actionName is "pause_all" then return my pause_all_youtube()
+	if actionName is "play_target" and (count of argv) > 4 then
+		return my play_inventory_target(item 2 of argv, item 3 of argv as integer, item 4 of argv as integer, item 5 of argv)
+	end if
 	return my play_youtube()
 end run
 
@@ -134,6 +138,64 @@ on pause_competing_media()
 		end tell
 	end if
 end pause_competing_media
+
+on pause_all_youtube()
+	set pauseJS to "(() => {let count=0;const player=document.getElementById('movie_player');try{if(player&&typeof player.getPlayerState==='function'&&player.getPlayerState()===1&&typeof player.pauseVideo==='function'){player.pauseVideo();count++;}}catch(e){}for(const media of document.querySelectorAll('video,audio')){try{if(!media.paused&&!media.ended){media.pause();count++;}}catch(e){}}return String(count);})()"
+	set pausedCount to 0
+	if application "Safari" is running then
+		tell application "Safari"
+			repeat with candidateWindow in windows
+				repeat with candidateTab in tabs of candidateWindow
+					try
+						if my is_youtube_video(URL of candidateTab) then
+							set resultText to do JavaScript pauseJS in candidateTab
+							set pausedCount to pausedCount + (resultText as integer)
+						end if
+					on error
+					end try
+				end repeat
+			end repeat
+		end tell
+	end if
+	if application "Google Chrome" is running then
+		tell application "Google Chrome"
+			repeat with candidateWindow in windows
+				repeat with candidateTab in tabs of candidateWindow
+					try
+						if my is_youtube_video(URL of candidateTab) then
+							set resultText to execute candidateTab javascript pauseJS
+							set pausedCount to pausedCount + (resultText as integer)
+						end if
+					on error
+					end try
+				end repeat
+			end repeat
+		end tell
+	end if
+	return "OK|paused:" & pausedCount
+end pause_all_youtube
+
+on play_inventory_target(browserName, windowIndex, tabIndex, videoID)
+	if (length of videoID) is not 11 then return "ERROR|Invalid YouTube video ID"
+	if browserName is "Chrome" then set browserName to "Google Chrome"
+	try
+		if browserName is "Safari" and application "Safari" is running then
+			tell application "Safari"
+				set liveURL to URL of tab tabIndex of window windowIndex as text
+			end tell
+			if my url_video_id(liveURL) is videoID then return my play_target(browserName, windowIndex, tabIndex, liveURL)
+		else if browserName is "Google Chrome" and application "Google Chrome" is running then
+			tell application "Google Chrome"
+				set liveURL to URL of tab tabIndex of window windowIndex as text
+			end tell
+			if my url_video_id(liveURL) is videoID then return my play_target(browserName, windowIndex, tabIndex, liveURL)
+		end if
+	on error
+	end try
+	-- Window and tab indexes can move between detection and a controller tap.
+	-- Preserve the user's selection by relocating the same stable video ID.
+	return my play_video_id(videoID)
+end play_inventory_target
 
 on play_target(browserName, windowIndex, tabIndex, expectedURL)
 	set playJS to "(() => {const v=[...document.querySelectorAll('video')].find(x=>x.readyState>=2)||document.querySelector('video');if(!v)return 'ERROR|Video is not ready';if(v.ended)v.currentTime=0;v.play().catch(()=>{});return 'OK|'+(document.title||'YouTube');})()"

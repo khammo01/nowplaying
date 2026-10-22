@@ -76,6 +76,24 @@ def exact_youtube_resume() -> str:
         'print -r -- "queued"'
     )
 
+
+def youtube_conflict_target() -> str:
+    """Play one exact inventory tab selected from the controller conflict UI."""
+    return (
+        "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
+        "browser=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_browser\"' 2>/dev/null)\n"
+        "window_index=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_window_index\"' 2>/dev/null)\n"
+        "tab_index=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_tab_index\"' 2>/dev/null)\n"
+        + detached(
+            f'/usr/bin/osascript {ROOT}/youtube_control.applescript play_target '
+            '"$browser" "$window_index" "$tab_index" "$video_id"'
+        )
+    )
+
 COMMANDS = {
     # Transport presses can arrive much faster than AppleScript can safely
     # address Music or a browser tab. Preserve every press and execute them in
@@ -150,6 +168,10 @@ NEW_TRIGGERS = {
     # Next Video script already calls this name, and queue selections use it
     # as well. Keeping the legacy cached alias preserves older dashboards.
     "mac_youtube_play_selected": exact_youtube_resume(),
+    "mac_youtube_resolve_conflict": youtube_conflict_target(),
+    "mac_youtube_pause_all": detached(
+        f"/usr/bin/osascript {ROOT}/youtube_control.applescript pause_all"
+    ),
     "media_controller_set_input_volume": (
         "target=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"meeting_input_volume\"' 2>/dev/null)\n"
