@@ -95,3 +95,9 @@ excluded; use `primevideo.com` or `music.amazon.com` for Amazon media.
 Intentional playback on any other site is also ignored. To add a service,
 update `mediaHosts` in both JavaScript paths and the playback regression cases.
 Native Music and VLC detection is unchanged.
+
+## ESPHome media remotes
+
+The working reference firmware for the rectangular touch controller and the round rotary controller is published under [`controllers/`](controllers/README.md). It includes the Home Assistant queue/conflict package, hardware-specific ESPHome profiles, required local components, and font setup. Both profiles consume the same NowPlaying metadata and command contract.
+
+The [`custom_components/nowplaying`](custom_components/nowplaying/README.md) Home Assistant integration presents that same state as a native `media_player` and groups the queue, active Mac, connection, conflict, source, and refresh entities as one device.

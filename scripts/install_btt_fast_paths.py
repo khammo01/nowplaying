@@ -54,6 +54,11 @@ def exact_youtube_resume() -> str:
         "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
         'mkdir -p "$HOME/NowPlaying/cache"\n'
+        # An exact-video switch can otherwise be followed by a second generic
+        # play/pause action from the same physical press. Keep the guard short
+        # enough that an intentional later press still behaves normally.
+        'print -r -- "$(( $(/bin/date +%s) + 3 ))" '
+        '>"$HOME/NowPlaying/cache/exact-youtube-handoff-until"\n'
         '(\n'
         f'  result=$(/usr/bin/osascript {ROOT}/youtube_control.applescript play_id "$video_id" 2>&1)\n'
         '  print -r -- "$result" >>"$HOME/NowPlaying/cache/btt-media-actions.log"\n'
@@ -69,6 +74,24 @@ def exact_youtube_resume() -> str:
         '  fi\n'
         ') </dev/null >/dev/null 2>&1 &!\n'
         'print -r -- "queued"'
+    )
+
+
+def youtube_conflict_target() -> str:
+    """Play one exact inventory tab selected from the controller conflict UI."""
+    return (
+        "video_id=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_video_id\"' 2>/dev/null)\n"
+        "browser=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_browser\"' 2>/dev/null)\n"
+        "window_index=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_window_index\"' 2>/dev/null)\n"
+        "tab_index=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
+        "to get_string_variable \"youtube_tab_index\"' 2>/dev/null)\n"
+        + detached(
+            f'/usr/bin/osascript {ROOT}/youtube_control.applescript play_target '
+            '"$browser" "$window_index" "$tab_index" "$video_id"'
+        )
     )
 
 COMMANDS = {
@@ -141,6 +164,14 @@ NEW_TRIGGERS = {
         f"/usr/bin/osascript {ROOT}/teams_mute_state.applescript"
     ),
     "mac_youtube_play_cached": exact_youtube_resume(),
+    # Both Macs receive the same exact-video fast path. Home Assistant's
+    # Next Video script already calls this name, and queue selections use it
+    # as well. Keeping the legacy cached alias preserves older dashboards.
+    "mac_youtube_play_selected": exact_youtube_resume(),
+    "mac_youtube_resolve_conflict": youtube_conflict_target(),
+    "mac_youtube_pause_all": detached(
+        f"/usr/bin/osascript {ROOT}/youtube_control.applescript pause_all"
+    ),
     "media_controller_set_input_volume": (
         "target=$(/usr/bin/osascript -e 'tell application \"BetterTouchTool\" "
         "to get_string_variable \"meeting_input_volume\"' 2>/dev/null)\n"
