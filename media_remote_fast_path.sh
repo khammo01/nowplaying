@@ -120,6 +120,16 @@ case "$effective_bundle_id" in
         ;;
 esac
 
+# Safari changes its MediaRemote owner when the user merely foregrounds a
+# different YouTube tab. An idle or never-started foreground tab therefore
+# emits a provisional "paused" edge even while another tab is still playing.
+# Wake the authoritative browser scan above, but do not publish that ambiguous
+# browser pause. The full scan will promptly publish a real pause when no tab
+# is playing, or retain the actual background-playing tab otherwise.
+if [[ "$media_source" == "browser" && "$playing" != "true" ]]; then
+    exit 0
+fi
+
 if [[ "$playing" == "true" ]]; then
     media_status="${media_status_hint:-Playing}"
     [[ -n "$title" ]] || title="Loading media…"
