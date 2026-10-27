@@ -86,4 +86,34 @@ const canonicalResult=JSON.parse(eval(expressions[1]));
 if(canonicalResult.summary!==currentSummary)
  throw Error(JSON.stringify({case:'canonical-current-youtube-metadata',result:canonicalResult}));
 count++;
+// Non-YouTube pages supply semantic metadata without copying navigation text.
+location={hostname:'company.udemy.com',href:'https://company.udemy.com/course/security/learn/lecture/123#overview',pathname:'/course/security/learn/lecture/123',origin:'https://company.udemy.com'};
+const lectureMedia={tagName:'VIDEO',duration:338,paused:false,ended:false,readyState:4,currentTime:321,playbackRate:1};
+const node=t=>({textContent:t,innerText:t});
+const courseDescription='A basic security course covering phishing, safe browsing, passwords, social engineering and data leakage.';
+const descriptionHeading={...node('Description'),tagName:'H2',nextElementSibling:node(courseDescription)};
+const learningHeading={...node("What you'll learn"),tagName:'H2',nextElementSibling:node('Spot scam emails and suspicious links.')};
+const courseLD={textContent:JSON.stringify({'@context':'https://schema.org','@type':'Course',name:'Security Awareness Training',description:'Short structured course description.',author:{'@type':'Person',name:'Michael Biocchi'}})};
+document={
+ querySelectorAll:s=>s==='video,audio'?[lectureMedia]:s==='script[type="application/ld+json"]'?[courseLD]:s==='h1,h2,h3,h4'?[descriptionHeading,learningHeading]:[],
+ querySelector:s=>s==='[data-purpose="lecture-title"]'?node('5. Introduction to Phishing'):s==='h1'?node('Security Awareness Training'):null,
+ getElementById:()=>null,hasFocus:()=>true,visibilityState:'visible',title:'Security Awareness Training'
+};
+navigator={mediaSession:{playbackState:'playing',metadata:null}};window={};
+const courseResult=JSON.parse(eval(expressions[1]));
+if(courseResult.title!=='Security Awareness Training · Introduction to Phishing'||courseResult.channel!=='Michael Biocchi'||!courseResult.description.includes(courseDescription)||!courseResult.description.includes('Spot scam emails')||courseResult.video_id!=='')throw Error(JSON.stringify({case:'udemy-course-context',courseResult}));
+count++;
+// A supported site with only standard page metadata still has a description.
+location={hostname:'vimeo.com',href:'https://vimeo.com/123',pathname:'/123',origin:'https://vimeo.com'};
+document.querySelectorAll=s=>s==='video,audio'?[lectureMedia]:[];
+document.querySelector=s=>s==='meta[property="og:description"]'?{getAttribute:()=> 'An educational video about recognizing suspicious links.'}:null;
+const genericResult=JSON.parse(eval(expressions[1]));
+if(genericResult.description!=='An educational video about recognizing suspicious links.')throw Error(JSON.stringify({case:'generic-page-description',genericResult}));
+count++;
+// Malformed structured data is ignored; page metadata remains usable.
+document.querySelectorAll=s=>s==='video,audio'?[lectureMedia]:s==='script[type="application/ld+json"]'?[{textContent:'broken JSON'}]:[];
+const malformedResult=JSON.parse(eval(expressions[1]));
+if(malformedResult.description!==genericResult.description)throw Error('malformed JSON-LD broke metadata fallback');
+count++;
+
 console.log('Passed '+count+' playback checks across both JavaScript paths.');

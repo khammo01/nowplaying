@@ -964,6 +964,57 @@ with timeout of 12 seconds
 		"   return '';" & linefeed & ¬
 		" };" & linefeed & ¬
 		"" & linefeed & ¬
+		" function readPageMetadata(doc){" & linefeed & ¬
+		"   const clean=v=>typeof v==='string'?v.replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' ').replace(/\\s+/g,' ').trim():'';" & linefeed & ¬
+		"   const copy=n=>clean(n?.innerText||n?.textContent||'');" & linefeed & ¬
+		"   const select=s=>{try{return doc.querySelector(s);}catch(e){return null;}};" & linefeed & ¬
+		"   const all=s=>{try{return [...doc.querySelectorAll(s)];}catch(e){return [];}};" & linefeed & ¬
+		"   const first=selectors=>selectors.map(s=>copy(select(s))).find(Boolean)||'';" & linefeed & ¬
+		"   const objects=[];" & linefeed & ¬
+		"   function collect(value,depth=0){" & linefeed & ¬
+		"     if(depth>5||objects.length>=100||!value||typeof value!=='object')return;" & linefeed & ¬
+		"     if(Array.isArray(value)){value.slice(0,30).forEach(x=>collect(x,depth+1));return;}" & linefeed & ¬
+		"     objects.push(value);" & linefeed & ¬
+		"     for(const key of ['@graph','mainEntity','hasPart','subjectOf'])collect(value[key],depth+1);" & linefeed & ¬
+		"   }" & linefeed & ¬
+		"   for(const script of all('script[type=\"application/ld+json\"]').slice(0,12)){" & linefeed & ¬
+		"     const raw=script.textContent||'';" & linefeed & ¬
+		"     if(raw.length>200000)continue;" & linefeed & ¬
+		"     try{collect(JSON.parse(raw));}catch(e){}" & linefeed & ¬
+		"   }" & linefeed & ¬
+		"   const hasType=(x,n)=>[x['@type']].flat().some(t=>String(t||'').split('/').pop()===n);" & linefeed & ¬
+		"   const course=objects.find(x=>hasType(x,'Course'));" & linefeed & ¬
+		"   const video=objects.find(x=>hasType(x,'VideoObject'));" & linefeed & ¬
+		"   const article=objects.find(x=>hasType(x,'Article')||hasType(x,'LearningResource'));" & linefeed & ¬
+		"   const structured=video||course||article||{};" & linefeed & ¬
+		"   const headings=all('h1,h2,h3,h4');" & linefeed & ¬
+		"   function section(labels){" & linefeed & ¬
+		"     const h=headings.find(n=>labels.includes(copy(n).toLowerCase()));" & linefeed & ¬
+		"     if(!h)return '';" & linefeed & ¬
+		"     let node=h.nextElementSibling;" & linefeed & ¬
+		"     const parts=[];" & linefeed & ¬
+		"     for(let i=0;node&&i<8;i++,node=node.nextElementSibling){" & linefeed & ¬
+		"       if(/^H[1-4]$/.test(node.tagName||''))break;" & linefeed & ¬
+		"       const value=copy(node);if(value)parts.push(value);" & linefeed & ¬
+		"       if(parts.join(' ').length>=6000)break;" & linefeed & ¬
+		"     }" & linefeed & ¬
+		"     if(parts.length)return parts.join(' ').slice(0,6000);" & linefeed & ¬
+		"     // Some sites wrap the heading together with its section content." & linefeed & ¬
+		"     const parent=copy(h.parentElement);" & linefeed & ¬
+		"     const label=copy(h);" & linefeed & ¬
+		"     return parent.startsWith(label)&&parent.length>label.length+30?parent.slice(label.length).trim().slice(0,6000):'';" & linefeed & ¬
+		"   }" & linefeed & ¬
+		"   const description=first(['[data-purpose=\"course-description\"]','[data-purpose=\"description\"]','[itemprop=\"description\"]','[data-testid=\"description\"]'])||section(['description','about this course','about this video'])||clean(structured.description)||first(['article'])||'';" & linefeed & ¬
+		"   const learning=section([\"what you'll learn\",'what you’ll learn','learning objectives']);" & linefeed & ¬
+		"   const courseTitle=clean(course?.name)||first(['h1']);" & linefeed & ¬
+		"   const active=select('[aria-current=\"true\"] [data-purpose=\"item-title\"]')||select('[aria-current=\"page\"] [data-purpose=\"item-title\"]')||select('[class*=\"curriculum-item-link--is-current\"] [data-purpose=\"item-title\"]')||select('[data-purpose=\"lecture-title\"]');" & linefeed & ¬
+		"   const lectureTitle=copy(active).replace(/^\\d+[.)]\\s*/, '');" & linefeed & ¬
+		"   const author=structured.author||course?.author||structured.creator;" & linefeed & ¬
+		"   const creator=clean(typeof author==='string'?author:Array.isArray(author)?author.map(x=>x.name||'').join(', '):author?.name||'')||first(['[data-purpose=\"instructor-name-top\"]','[data-purpose=\"instructor-name\"]','[rel=\"author\"]']);" & linefeed & ¬
+		"   const context=[lectureTitle?'Current lecture: '+lectureTitle+'.':'',description,learning?'Learning objectives: '+learning:''].filter(Boolean).join(' ').slice(0,8000);" & linefeed & ¬
+		"   return {courseTitle,lectureTitle,creator,description:context};" & linefeed & ¬
+		" }" & linefeed & ¬
+		" const pageMetadata=isYoutube?{}:readPageMetadata(document);" & linefeed & ¬
 		" const parseVideoId=u=>{" & linefeed & ¬
 		"   try {" & linefeed & ¬
 		"     const x=new URL(u,location.origin);" & linefeed & ¬
@@ -1096,7 +1147,7 @@ with timeout of 12 seconds
 		"   visibleText('ytd-reel-video-renderer h2')||" & linefeed & ¬
 		"   '';" & linefeed & ¬
 		"" & linefeed & ¬
-		" const title=isShorts" & linefeed & ¬
+		" let title=isShorts" & linefeed & ¬
 		"   ? (" & linefeed & ¬
 		"       msMeta?.title||" & linefeed & ¬
 		"       shortVisibleTitle||" & linefeed & ¬
@@ -1119,6 +1170,7 @@ with timeout of 12 seconds
 		"         .trim()" & linefeed & ¬
 		"     );" & linefeed & ¬
 		"" & linefeed & ¬
+		" if(!isYoutube&&pageMetadata.lectureTitle)title=[pageMetadata.courseTitle||title,pageMetadata.lectureTitle].filter(Boolean).join(' · ');" & linefeed & ¬
 		" const initialDataChannel=" & linefeed & ¬
 		"   window?.ytInitialData?.metadata?.channelMetadataRenderer?.title||" & linefeed & ¬
 		"   window?.ytInitialData?.contents" & linefeed & ¬
@@ -1154,6 +1206,7 @@ with timeout of 12 seconds
 		"       msMeta?.artist||" & linefeed & ¬
 		"       initialVD.author||" & linefeed & ¬
 		"       initialDataChannel||" & linefeed & ¬
+		"       (!isYoutube?pageMetadata.creator:'')||" & linefeed & ¬
 		"       meta('meta[name=\"author\"]')||" & linefeed & ¬
 		"       meta('meta[property=\"og:site_name\"]')||" & linefeed & ¬
 		"       text('#channel-name a')||" & linefeed & ¬
@@ -1216,7 +1269,9 @@ with timeout of 12 seconds
 		"   .replace(/\\s+/g,' ')" & linefeed & ¬
 		"   .trim();" & linefeed & ¬
 		"" & linefeed & ¬
-		" const literalDescription=isShorts" & linefeed & ¬
+		" const literalDescription=!isYoutube" & linefeed & ¬
+		"   ? (pageMetadata.description||meta('meta[name=\"description\"]')||meta('meta[property=\"og:description\"]')||'')" & linefeed & ¬
+		"   : isShorts" & linefeed & ¬
 		"   ? (" & linefeed & ¬
 		"       shortDomDesc||" & linefeed & ¬
 		"       (playerDataMatchesCurrent?(vd.shortDescription||''):'')||" & linefeed & ¬

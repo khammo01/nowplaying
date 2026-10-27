@@ -262,6 +262,9 @@ display_media_status() {
         printf '%s' "$media_status"
     fi
 }
+is_youtube_playback_url() {
+    [[ "${url:-}" =~ ^https?://([[:alnum:]-]+\.)*(youtube\.com|youtu\.be)([/?:#]|$) ]]
+}
 ensure_nagbot_computer_agent() {
     local pid_file="$CACHE_ROOT/nagbot-computer-agent.lock/pid" pid=""
     [[ -r "$pid_file" ]] && pid=$(<"$pid_file")
@@ -1589,8 +1592,10 @@ emit_cli() {
         echo "     Channel:         $artist"; echo "     Playlist:        $playlist_name"
         echo "     Speed:           ${playback_speed}"
         print_description_lines "$desc"
-        echo "     Video Binge:     Current score: $youtube_video_count"
-        echo "                      High Score: $high_score"
+        if is_youtube_playback_url; then
+            echo "     Video Binge:     Current score: $youtube_video_count"
+            echo "                      High Score: $high_score"
+        fi
         printf '\n\n\n\n'
         echo "                            $currentTimehms / $duration_hms"
         cecho "   $progress_bar_full"

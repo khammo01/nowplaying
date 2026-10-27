@@ -1,0 +1,15 @@
+{% macro synopsis_key(a) -%}
+  {%- set video = a.get('video_id', '') | default('', true) | string | trim -%}
+  {%- set url = a.get('url', '') | default('', true) | string | trim -%}
+  {%- if video | length == 11 and url | lower | regex_match('^https?://([a-z0-9-]+\\.)*(youtube\\.com|youtu\\.be)([:/]|$)') -%}
+    {{- video -}}
+  {%- elif url | lower | regex_match('^https?://') -%}
+    {%- set clean = url.split('#')[0] -%}
+    {%- if clean | lower | regex_match('^https?://([a-z0-9-]+\\.)*udemy\\.com([:/]|$)') -%}
+      {%- set clean = clean.split('?')[0] -%}
+    {%- endif -%}
+    {{- 'page:' ~ (clean | sha256) -}}
+  {%- elif video | length == 11 -%}
+    {{- video -}}
+  {%- endif -%}
+{%- endmacro %}
