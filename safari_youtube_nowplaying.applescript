@@ -102,7 +102,7 @@ on is_media_url(theURL)
 		set isHomepage to (u ends with "youtube.com" or u ends with "youtube.com/")
 		if not isDedicatedVideo and not isHomepage then return false
 	end if
-	set mediaHosts to {"youtube.com", "youtu.be", "netflix.com", "hulu.com", "disneyplus.com", "max.com", "hbomax.com", "primevideo.com", "tv.apple.com", "peacocktv.com", "paramountplus.com", "twitch.tv", "vimeo.com", "dailymotion.com", "crunchyroll.com", "tubi.tv", "pluto.tv", "spotify.com", "music.apple.com", "music.amazon.com", "soundcloud.com", "pandora.com", "tidal.com", "deezer.com", "bandcamp.com", "app.plex.tv"}
+	set mediaHosts to {"youtube.com", "youtu.be", "netflix.com", "hulu.com", "disneyplus.com", "max.com", "hbomax.com", "primevideo.com", "tv.apple.com", "peacocktv.com", "paramountplus.com", "twitch.tv", "vimeo.com", "udemy.com", "dailymotion.com", "crunchyroll.com", "tubi.tv", "pluto.tv", "spotify.com", "music.apple.com", "music.amazon.com", "soundcloud.com", "pandora.com", "tidal.com", "deezer.com", "bandcamp.com", "app.plex.tv"}
 	repeat with mediaHost in mediaHosts
 		set allowedHost to mediaHost as string
 		if parsedHost is allowedHost or parsedHost ends with "." & allowedHost then return true
@@ -150,7 +150,7 @@ with timeout of 12 seconds
 		" const mediaHosts=[" & linefeed & ¬
 		"   'youtube.com','youtu.be','netflix.com','hulu.com','disneyplus.com'," & linefeed & ¬
 		"   'max.com','hbomax.com','primevideo.com','tv.apple.com'," & linefeed & ¬
-		"   'peacocktv.com','paramountplus.com','twitch.tv','vimeo.com'," & linefeed & ¬
+		"   'peacocktv.com','paramountplus.com','twitch.tv','vimeo.com','udemy.com'," & linefeed & ¬
 		"   'dailymotion.com','crunchyroll.com','tubi.tv','pluto.tv'," & linefeed & ¬
 		"   'spotify.com','music.apple.com','music.amazon.com'," & linefeed & ¬
 		"   'soundcloud.com','pandora.com','tidal.com','deezer.com'," & linefeed & ¬
@@ -870,7 +870,7 @@ with timeout of 12 seconds
 		" const mediaHosts=[" & linefeed & ¬
 		"   'youtube.com','youtu.be','netflix.com','hulu.com','disneyplus.com'," & linefeed & ¬
 		"   'max.com','hbomax.com','primevideo.com','tv.apple.com'," & linefeed & ¬
-		"   'peacocktv.com','paramountplus.com','twitch.tv','vimeo.com'," & linefeed & ¬
+		"   'peacocktv.com','paramountplus.com','twitch.tv','vimeo.com','udemy.com'," & linefeed & ¬
 		"   'dailymotion.com','crunchyroll.com','tubi.tv','pluto.tv'," & linefeed & ¬
 		"   'spotify.com','music.apple.com','music.amazon.com'," & linefeed & ¬
 		"   'soundcloud.com','pandora.com','tidal.com','deezer.com'," & linefeed & ¬

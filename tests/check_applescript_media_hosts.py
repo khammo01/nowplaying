@@ -21,6 +21,11 @@ cases = {
     # probe rejects muted hover previews before they can become Now Playing.
     'https://www.youtube.com/': True,
     'https://www.youtube.com/results?search_query=test': False,
+    'https://udemy.com/course/example/learn/lecture/1': True,
+    'https://www.udemy.com/course/example/learn/lecture/1': True,
+    'https://company.udemy.com/course/example/learn/lecture/1': True,
+    'https://udemy.com.evil.test/course/example': False,
+    'https://notudemy.com/course/example': False,
 }
 
 checks = []

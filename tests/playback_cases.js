@@ -17,14 +17,14 @@ function check(host,durations,expected,tag='VIDEO',paused=false,path='/article')
 for(const host of ['amazon.com','www.amazon.com','amazon.co.uk','nytimes.com',
  'www.nytimes.com','washingtonpost.com','www.washingtonpost.com',
  'google.com','nextdoor.com','example.com','notyoutube.com',
- 'youtube.com.example.org','spotify.com.evil.test']) {
+ 'youtube.com.example.org','spotify.com.evil.test','notudemy.com','udemy.com.evil.test']) {
  for(const d of [0,3,10,120,Infinity,NaN])check(host,[d],false);
  check(host,[120],false,'AUDIO');
  check(host,[],false); // Media Session alone must not activate playback.
 }
 const allowed=['youtube.com','youtu.be','netflix.com','hulu.com','disneyplus.com',
  'max.com','hbomax.com','primevideo.com','tv.apple.com','peacocktv.com',
- 'paramountplus.com','twitch.tv','vimeo.com','dailymotion.com','crunchyroll.com',
+ 'paramountplus.com','twitch.tv','vimeo.com','udemy.com','dailymotion.com','crunchyroll.com',
  'tubi.tv','pluto.tv','spotify.com','music.apple.com','music.amazon.com',
  'soundcloud.com','pandora.com','tidal.com','deezer.com','bandcamp.com','app.plex.tv'];
 for(const host of allowed){
@@ -34,6 +34,7 @@ for(const host of allowed){
 }
 check('youtube.com',[30],false,'VIDEO',false,'/');
 check('music.youtube.com',[120],true,'AUDIO',false,'/watch');
+check('company.udemy.com',[120],true,'VIDEO',false,'/course/example/learn/lecture/1');
 // An embedded player on an unlisted top-level site must remain ignored.
 check('amazon.com',[120,120],false);
 
