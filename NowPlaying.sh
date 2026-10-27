@@ -255,6 +255,13 @@ meeting_status_label() {
         *) printf 'Meeting status unavailable' ;;
     esac
 }
+display_media_status() {
+    if [[ "$media_status" == "Idle" && "$meeting_state" == "on" ]]; then
+        printf 'In a Meeting'
+    else
+        printf '%s' "$media_status"
+    fi
+}
 ensure_nagbot_computer_agent() {
     local pid_file="$CACHE_ROOT/nagbot-computer-agent.lock/pid" pid=""
     [[ -r "$pid_file" ]] && pid=$(<"$pid_file")
@@ -1560,7 +1567,7 @@ emit_cli() {
     nodebug printf '\033[H\033[J'
     local poll_time_seconds="${last_polled_time%%.*}"
     local ha_time_seconds="${last_ha_update_time_local%%.*}"
-    nodebug printf '\033]0;NagBot NowPlaying — %s — %s\007' "$media_status" "$poll_time_seconds"
+    nodebug printf '\033]0;NagBot NowPlaying — %s — %s\007' "$(display_media_status)" "$poll_time_seconds"
     printf '\n\n\n'
     if [[ "$music_playing" == "true" ]]; then
         printf '\n\n\n'
@@ -1617,10 +1624,14 @@ emit_cli() {
         [[ -z "$idle_start_epoch" ]] ||
             idle_hhmm=$(date -r "$idle_start_epoch" "+%H:%M")
         printf '\n\n'
-        echo "                            Media: Idle"
+        printf '                            %s\n' "$(display_media_status)"
         echo "  -------------------------------------------------------------------"
         printf '\n\n\n\n\n\n\n'
-        echo "                       Idle - since $idle_hhmm"
+        if [[ "$meeting_state" == "on" ]]; then
+            echo "                       Meeting mode is active"
+        else
+            echo "                       Idle - since $idle_hhmm"
+        fi
         printf '\n\n\n\n\n\n\n'
     fi
     echo "  -------------------------------------------------------------------"

@@ -43,6 +43,18 @@ TEST_NOW=193
 RESPONSE='{"state":"unavailable"}'
 read_meeting_state
 [[ "$meeting_state" == unknown ]]
+media_status=Idle
+meeting_state=on
+[[ "$(display_media_status)" == 'In a Meeting' ]]
+[[ "$media_status" == Idle ]]
+meeting_state=off
+[[ "$(display_media_status)" == Idle ]]
+meeting_state=unknown
+[[ "$(display_media_status)" == Idle ]]
+meeting_state=on
+for media_status in Music YouTube Playing Video Paused; do
+    [[ "$(display_media_status)" == "$media_status" ]]
+done
 '''
 subprocess.run(['bash', '-c', program], env=dict(os.environ), check=True)
-print('Passed meeting on/off, polling interval and unavailable-state checks.')
+print('Passed meeting polling, idle display override and playback-state preservation checks.')
