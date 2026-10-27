@@ -34,6 +34,16 @@ fi
 
 case "$media_source:$command_name" in
   *:system_playpause)
+    # Exact queue selection owns playback during its short handoff window.
+    # Suppress a duplicate generic command from the same controller press so
+    # it cannot resume Safari's previously selected tab behind the new video.
+    handoff_file="$root/cache/exact-youtube-handoff-until"
+    handoff_until=0
+    [[ -r "$handoff_file" ]] && handoff_until="$(<"$handoff_file")"
+    if [[ "$handoff_until" == <-> ]] && (( $(/bin/date +%s) <= handoff_until )); then
+      print -- "suppressed duplicate playpause during exact YouTube handoff"
+      exit 0
+    fi
     # Safari sometimes drops its macOS MediaRemote session while YouTube is
     # still active. Prefer the exact cached YouTube tab in that case; all
     # other sources retain the ordinary system media-key behavior.

@@ -1,0 +1,157 @@
+# Optional Home Assistant package for the multi-video conflict chooser.
+#
+# Prerequisites:
+#   * NowPlaying.sh posts to the webhook in `nowplaying_webhook_id`.
+#   * script.nowplaying_send_to_source accepts source_device and trigger fields.
+#     It must route the named BetterTouchTool trigger to the selected Mac.
+
+input_select:
+  youtube_queue_source:
+    name: YouTube queue source
+    options:
+      - Auto
+      - Mac Mini
+      - Work Mac
+    initial: Auto
+    icon: mdi:youtube
+
+automation:
+  - id: nowplaying_publish_youtube_inventory
+    alias: NowPlaying - publish YouTube inventory
+    mode: queued
+    max: 20
+    triggers:
+      - trigger: webhook
+        webhook_id: !secret nowplaying_webhook_id
+        allowed_methods: [POST]
+        local_only: true
+    actions:
+      - event: now_playing_youtube_queue_update
+        event_data:
+          source_device: "{{ trigger.json.source_device | default('Unknown Mac', true) }}"
+          sent_at: "{{ trigger.json.sent_at | default(now().isoformat(), true) }}"
+          youtube_queue: "{{ trigger.json.youtube_queue | default([], true) }}"
+          youtube_playing_tabs: "{{ trigger.json.youtube_playing_tabs | default([], true) }}"
+
+template:
+  - triggers:
+      - trigger: event
+        event_type: now_playing_youtube_queue_update
+    sensor:
+      - name: Now Playing YouTube Queue - Mac Mini
+        unique_id: now_playing_youtube_queue_mac_mini_public
+        icon: mdi:youtube
+        state: >
+          {% set source = trigger.event.data.source_device | default('') | lower %}
+          {{ trigger.event.data.youtube_queue | default([], true) | count
+             if 'mini' in source else this.state | default(0) }}
+        attributes:
+          source_device: Mac Mini
+          sent_at: >
+            {% set source = trigger.event.data.source_device | default('') | lower %}
+            {{ trigger.event.data.sent_at | default(now().isoformat(), true)
+               if 'mini' in source else this.attributes.sent_at | default('') }}
+          queue_items: >
+            {% set source = trigger.event.data.source_device | default('') | lower %}
+            {{ trigger.event.data.youtube_queue | default([], true)
+               if 'mini' in source else this.attributes.queue_items | default([]) }}
+          playing_items: >
+            {% set source = trigger.event.data.source_device | default('') | lower %}
+            {{ trigger.event.data.youtube_playing_tabs | default([], true)
+               if 'mini' in source else this.attributes.playing_items | default([]) }}
+      - name: Now Playing YouTube Queue - Work Mac
+        unique_id: now_playing_youtube_queue_work_mac_public
+        icon: mdi:youtube
+        state: >
+          {% set source = trigger.event.data.source_device | default('') | lower %}
+          {{ trigger.event.data.youtube_queue | default([], true) | count
+             if source and 'mini' not in source else this.state | default(0) }}
+        attributes:
+          source_device: Work Mac
+          sent_at: >
+            {% set source = trigger.event.data.source_device | default('') | lower %}
+            {{ trigger.event.data.sent_at | default(now().isoformat(), true)
+               if source and 'mini' not in source else this.attributes.sent_at | default('') }}
+          queue_items: >
+            {% set source = trigger.event.data.source_device | default('') | lower %}
+            {{ trigger.event.data.youtube_queue | default([], true)
+               if source and 'mini' not in source else this.attributes.queue_items | default([]) }}
+          playing_items: >
+            {% set source = trigger.event.data.source_device | default('') | lower %}
+            {{ trigger.event.data.youtube_playing_tabs | default([], true)
+               if source and 'mini' not in source else this.attributes.playing_items | default([]) }}
+  - sensor:
+      - name: Now Playing YouTube Queue
+        unique_id: now_playing_youtube_queue_public
+        icon: mdi:youtube
+        state: >
+          {% set mini = state_attr('sensor.now_playing_youtube_queue_mac_mini', 'queue_items') | default([], true) %}
+          {% set work = state_attr('sensor.now_playing_youtube_queue_work_mac', 'queue_items') | default([], true) %}
+          {% set mode = states('input_select.youtube_queue_source') %}
+          {% set use_mini = mode == 'Mac Mini' or (mode == 'Auto' and (mini | count > 0 or work | count == 0)) %}
+          {{ (mini if use_mini else work) | count }}
+        attributes:
+          source_device: >
+            {% set mini = state_attr('sensor.now_playing_youtube_queue_mac_mini', 'queue_items') | default([], true) %}
+            {% set work = state_attr('sensor.now_playing_youtube_queue_work_mac', 'queue_items') | default([], true) %}
+            {% set mode = states('input_select.youtube_queue_source') %}
+            {{ 'Mac Mini' if mode == 'Mac Mini' or (mode == 'Auto' and (mini | count > 0 or work | count == 0)) else 'Work Mac' }}
+          queue_items: >
+            {% set mini = state_attr('sensor.now_playing_youtube_queue_mac_mini', 'queue_items') | default([], true) %}
+            {% set work = state_attr('sensor.now_playing_youtube_queue_work_mac', 'queue_items') | default([], true) %}
+            {% set mode = states('input_select.youtube_queue_source') %}
+            {{ mini if mode == 'Mac Mini' or (mode == 'Auto' and (mini | count > 0 or work | count == 0)) else work }}
+          queue_json: >
+            {% set mini = state_attr('sensor.now_playing_youtube_queue_mac_mini', 'queue_items') | default([], true) %}
+            {% set work = state_attr('sensor.now_playing_youtube_queue_work_mac', 'queue_items') | default([], true) %}
+            {% set mode = states('input_select.youtube_queue_source') %}
+            {% set use_mini = mode == 'Mac Mini' or (mode == 'Auto' and (mini | count > 0 or work | count == 0)) %}
+            json:{{ {'source_device': 'Mac Mini' if use_mini else 'Work Mac', 'items': mini if use_mini else work} | to_json }}
+          conflict_count: >
+            {% set mini = state_attr('sensor.now_playing_youtube_queue_mac_mini', 'playing_items') | default([], true) %}
+            {% set work = state_attr('sensor.now_playing_youtube_queue_work_mac', 'playing_items') | default([], true) %}
+            {{ (mini + work) | count }}
+          conflict_items: >
+            {% set mini = state_attr('sensor.now_playing_youtube_queue_mac_mini', 'playing_items') | default([], true) %}
+            {% set work = state_attr('sensor.now_playing_youtube_queue_work_mac', 'playing_items') | default([], true) %}
+            {{ mini + work }}
+          conflict_json: >
+            {% set mini = state_attr('sensor.now_playing_youtube_queue_mac_mini', 'playing_items') | default([], true) %}
+            {% set work = state_attr('sensor.now_playing_youtube_queue_work_mac', 'playing_items') | default([], true) %}
+            json:{{ {'items': mini + work} | to_json }}
+
+script:
+  resolve_youtube_playback_conflict:
+    alias: Resolve multiple playing YouTube videos
+    description: Pause other YouTube playback, keep the selected tab playing, and foreground it.
+    icon: mdi:alert-circle-check-outline
+    mode: restart
+    fields:
+      source_device: {required: true, selector: {text: {}}}
+      browser: {required: true, selector: {text: {}}}
+      window_index: {required: true, selector: {number: {min: 1, max: 100, mode: box}}}
+      tab_index: {required: true, selector: {number: {min: 1, max: 500, mode: box}}}
+      video_id: {required: true, selector: {text: {}}}
+    sequence:
+      - variables:
+          chosen_source: "{{ 'Mac Mini' if 'mini' in (source_device | lower) else 'Work Mac' }}"
+          other_source: "{{ 'Work Mac' if chosen_source == 'Mac Mini' else 'Mac Mini' }}"
+          safe_browser: "{{ browser if browser in ['Safari', 'Chrome'] else '' }}"
+          safe_window: "{{ window_index | int(0) }}"
+          safe_tab: "{{ tab_index | int(0) }}"
+          safe_video_id: "{{ video_id | string }}"
+          items: "{{ state_attr('sensor.now_playing_youtube_queue', 'conflict_items') | default([], true) }}"
+          other_has_playback: "{{ items | selectattr('source_device', 'eq', other_source) | list | count > 0 }}"
+      - condition: template
+        value_template: "{{ safe_browser != '' and safe_window > 0 and safe_tab > 0 and safe_video_id is match('^[A-Za-z0-9_-]{11}$') }}"
+      - if: "{{ other_has_playback }}"
+        then:
+          - action: script.nowplaying_send_to_source
+            data:
+              source_device: "{{ other_source }}"
+              trigger: mac_youtube_pause_all
+      - action: script.nowplaying_send_to_source
+        data:
+          source_device: "{{ chosen_source }}"
+          trigger: >-
+            mac_youtube_resolve_conflict&youtube_browser={{ safe_browser }}&youtube_window_index={{ safe_window }}&youtube_tab_index={{ safe_tab }}&youtube_video_id={{ safe_video_id }}

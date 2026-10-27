@@ -24,6 +24,10 @@
 !/scripts/
 !/tests/
 !/.github/
+!/controllers/
+!/custom_components/
+/controllers/esphome/fonts/*.ttf
+/controllers/esphome/secrets.yaml
 .DS_Store
 __pycache__/
 *.pyc
