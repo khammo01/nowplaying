@@ -47,7 +47,7 @@ OMDB_API_KEY=test-only
                    MOCK_REQUESTS=str(root / 'requests.jsonl'), TERM='dumb')
         env.pop('NOWPLAYING_CONFIG', None)
         result = subprocess.run(['bash', str(root / 'NowPlaying.sh')], env=env,
-                                capture_output=True, text=True, timeout=20)
+                                input='q', capture_output=True, text=True, timeout=20)
         assert result.returncode == 0, result.stderr
         assert not result.stderr, result.stderr
         requests = [json.loads(line) for line in (root / 'requests.jsonl').read_text().splitlines()]

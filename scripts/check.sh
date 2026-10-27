@@ -10,6 +10,7 @@ done
 python3 "$ROOT/tests/check_playback.py"
 python3 "$ROOT/tests/check_applescript_media_hosts.py"
 python3 "$ROOT/tests/check_shell.py"
+python3 "$ROOT/tests/check_volume_read.py"
 python3 "$ROOT/tests/check_lock.py"
 python3 "$ROOT/tests/check_next_youtube.py"
 python3 "$ROOT/tests/check_browser_cache.py"

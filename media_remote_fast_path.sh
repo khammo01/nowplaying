@@ -136,7 +136,7 @@ fi
 printf -v duration_hms '%02d:%02d' $(( duration_sec / 60 )) $(( duration_sec % 60 ))
 source_device="${SOURCE_DEVICE:-$(/usr/sbin/scutil --get ComputerName 2>/dev/null || /bin/hostname -s)}"
 event_id="${source_device}-mediaremote-$(/usr/bin/python3 -c 'import time; print(int(time.time() * 1000))')"
-volume_percent=$(/usr/bin/osascript -e 'output volume of (get volume settings)' 2>/dev/null || printf '0')
+volume_percent=$(/usr/bin/python3 "$root/media_volume_read.py" 2>/dev/null || printf '0')
 
 payload=$(/usr/bin/jq -n \
     --argjson schema_version 2 \

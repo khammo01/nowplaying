@@ -234,10 +234,13 @@ cecho()     { printf '%b\n' "$1"; }
 ensure_nagbot_computer_agent() {
     local pid_file="$CACHE_ROOT/nagbot-computer-agent.lock/pid" pid=""
     [[ -r "$pid_file" ]] && pid=$(<"$pid_file")
-    if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
-        nohup "$NOWPLAYING_ROOT/scripts/nagbot_computer_agent.sh" \
-            >"$CACHE_ROOT/nagbot-computer-agent.log" 2>&1 &
+    if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+        return
     fi
+    # Keep an existing helper when stale ownership metadata has been removed.
+    pgrep -f "[/]scripts/nagbot_computer_agent\.sh" >/dev/null 2>&1 && return
+    nohup "$NOWPLAYING_ROOT/scripts/nagbot_computer_agent.sh" \
+        >"$CACHE_ROOT/nagbot-computer-agent.log" 2>&1 &
 }
 read_local_activity() {
     local json previous updated now
@@ -1342,19 +1345,12 @@ emit_artwork() {
 
 emit_home_assistant() {
     debugecho "DEBUG Updating HA"
-    # Report the Mac's current output-volume state. The controller cache is
-    # only a fast-path fallback; treating it as authoritative allowed a stale
-    # 16/16 value to survive indefinitely on the Work Mac.
-    local routed_volume_file="$CACHE_ROOT/soundsource-volume-percent"
-    local native_volume
-    native_volume=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || true)
-    if [[ "$native_volume" =~ ^[0-9]+$ ]]; then
-        volume_percent="$native_volume"
-        printf '%s' "$volume_percent" > "$routed_volume_file"
-    elif [[ -s "$routed_volume_file" ]]; then
-        volume_percent=$(<"$routed_volume_file")
-    else
-        volume_percent=0
+    # Read SoundSource's routed level or the controller cache without opening
+    # Core Audio from a short-lived process on every poll.
+    local reported_volume
+    reported_volume=$(/usr/bin/python3 "$NOWPLAYING_ROOT/media_volume_read.py" 2>/dev/null || true)
+    if [[ "$reported_volume" =~ ^[0-9]+$ ]]; then
+        volume_percent="$reported_volume"
     fi
     normalize_ints idle_duration playback_position_percent volume_percent duration_sec currentTime youtube_video_count high_score
     normalize_bools youtube_playing music_playing
