@@ -13,6 +13,8 @@ HA_SERVER="root@homeassistant.local"
 HA_BASE_URL="http://homeassistant.local:8123"
 HA_API_URL="http://homeassistant.local:8123/api/webhook/REPLACE_ME"
 HA_AUDIO_ENTITY="input_boolean.REPLACE_ME"
+# Read-only meeting status shown by NowPlaying; playback controls are unchanged.
+HA_MEETING_ENTITY="input_boolean.in_a_work_meeting"
 BEARER_TOKEN="REPLACE_ME"
 # Stable name included in each webhook payload. Defaults to the Mac computer name.
 # SOURCE_DEVICE="office-mac-mini"
