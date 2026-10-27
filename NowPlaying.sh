@@ -177,6 +177,7 @@ artwork_url=""; controller_artwork_url=""
 local_computer_active="true"; local_computer_locked="false"; local_display_asleep="false"; local_idle_seconds=0
 local_activity_reason="active"; last_local_computer_active=""; local_activity_changed="false"
 LOCAL_INACTIVE_CHECK_INTERVAL="${LOCAL_INACTIVE_CHECK_INTERVAL:-1}"
+meeting_state="unknown"; last_meeting_check_epoch=0
 
 
 # ============================================================
@@ -231,6 +232,29 @@ clock_now_ms() {
 }
 epoch_now() { date +%s; }
 cecho()     { printf '%b\n' "$1"; }
+read_meeting_state() {
+    local now response state
+    now=$(epoch_now)
+    (( now - last_meeting_check_epoch >= 30 )) || return 0
+    last_meeting_check_epoch="$now"
+    response=$(curl -fsS --connect-timeout 1 --max-time 2 \
+        -H "Authorization: Bearer $BEARER_TOKEN" \
+        "$HA_BASE_URL/api/states/${HA_MEETING_ENTITY:-input_boolean.in_a_work_meeting}" \
+        2>/dev/null || true)
+    [[ -n "$response" ]] || response='{}'
+    state=$(jq -r '.state // "unknown"' <<<"$response" 2>/dev/null || printf unknown)
+    case "$state" in
+        on|off) meeting_state="$state" ;;
+        *) meeting_state="unknown" ;;
+    esac
+}
+meeting_status_label() {
+    case "$meeting_state" in
+        on) printf 'In A Meeting' ;;
+        off) printf 'Not In A Meeting' ;;
+        *) printf 'Meeting status unavailable' ;;
+    esac
+}
 ensure_nagbot_computer_agent() {
     local pid_file="$CACHE_ROOT/nagbot-computer-agent.lock/pid" pid=""
     [[ -r "$pid_file" ]] && pid=$(<"$pid_file")
@@ -352,7 +376,7 @@ draw_startup_screen() {
     printf '\n\n\n\n\n\n\n'
     echo "  -------------------------------------------------------------------"
     echo "     Last Polled Time: --:--:--.--- | Check Interval: --"; echo "     Last HA Update Time: --:--:--.---"
-    echo "     Updated $(nowplaying_updated_relative) | Up to date"; echo ""
+    echo "     Updated $(nowplaying_updated_relative) | $(meeting_status_label)"; echo ""
 }
 
 
@@ -1624,7 +1648,7 @@ emit_cli() {
     echo "  -------------------------------------------------------------------"
     printf "     Poll %-8s | HA %-8s | Every %ss\n" \
         "$poll_time_seconds" "$ha_time_seconds" "$next_check_interval"
-    printf "     Updated %s | Up to date\n" "$(nowplaying_updated_relative)"
+    printf "     Updated %s | %s\n" "$(nowplaying_updated_relative)" "$(meeting_status_label)"
     # printf "     Timing: Music %dms | Browser %dms | VLC %dms | HA %dms | Sleep %dms\n" "$profile_music_ms" "$profile_browser_ms" "$profile_vlc_ms" "$profile_ha_network_ms" "$profile_sleep_ms"
     echo "     [Return/R] Refresh     [X] Restart     [Q] Quit"
 }
@@ -1636,6 +1660,7 @@ emit_cli() {
 
 check_for_self_update
 load_persistent_state
+read_meeting_state
 draw_startup_screen
 
 
@@ -1649,6 +1674,7 @@ while true; do
     loop_start_ms=$(timestamp_ms)
     loop_now_epoch=$(epoch_now)
     quicklook_media_kind=""
+    read_meeting_state
     read_local_activity
     if [[ "$local_computer_active" != "true" ]]; then
         # On a real active -> inactive transition, publish one final idle media
@@ -1665,6 +1691,7 @@ while true; do
             echo ""
             echo "     Media polling suspended: $local_activity_reason"
             echo "     Activity heartbeat remains online."
+            echo "     $(meeting_status_label)"
             echo ""
             echo "     [Return/R] Refresh     [X] Restart     [Q] Quit"
         fi
