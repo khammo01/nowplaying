@@ -256,7 +256,7 @@ meeting_status_label() {
     esac
 }
 display_media_status() {
-    if [[ "$media_status" == "Idle" && "$meeting_state" == "on" ]]; then
+    if [[ "${meeting_state:-unknown}" == "on" ]]; then
         printf 'In a Meeting'
     else
         printf '%s' "$media_status"
@@ -386,7 +386,7 @@ draw_startup_screen() {
     printf '\n\n\n\n\n\n\n'
     echo "  -------------------------------------------------------------------"
     echo "     Last Polled Time: --:--:--.--- | Check Interval: --"; echo "     Last HA Update Time: --:--:--.---"
-    echo "     Updated $(nowplaying_updated_relative) | $(meeting_status_label)"; echo ""
+    echo "     Updated $(nowplaying_updated_relative) | Up to date"; echo ""
 }
 
 
@@ -1594,7 +1594,14 @@ emit_cli() {
     local ha_time_seconds="${last_ha_update_time_local%%.*}"
     nodebug printf '\033]0;NagBot NowPlaying — %s — %s\007' "$(display_media_status)" "$poll_time_seconds"
     printf '\n\n\n'
-    if [[ "$music_playing" == "true" ]]; then
+    if [[ "${meeting_state:-unknown}" == "on" ]]; then
+        printf '\n\n'
+        echo "                         NagBot NowPlaying"
+        echo "  -------------------------------------------------------------------"
+        printf '\n\n\n\n\n\n\n'
+        echo "                       In a Meeting"
+        printf '\n\n\n\n\n\n\n'
+    elif [[ "$music_playing" == "true" ]]; then
         printf '\n\n\n'
         echo "                         Now Playing - Music"
         echo "  -------------------------------------------------------------------"
@@ -1651,20 +1658,16 @@ emit_cli() {
         [[ -z "$idle_start_epoch" ]] ||
             idle_hhmm=$(date -r "$idle_start_epoch" "+%H:%M")
         printf '\n\n'
-        printf '                            %s\n' "$(display_media_status)"
+        echo "                            Media: Idle"
         echo "  -------------------------------------------------------------------"
         printf '\n\n\n\n\n\n\n'
-        if [[ "$meeting_state" == "on" ]]; then
-            echo "                       Meeting mode is active"
-        else
-            echo "                       Idle - since $idle_hhmm"
-        fi
+        echo "                       Idle - since $idle_hhmm"
         printf '\n\n\n\n\n\n\n'
     fi
     echo "  -------------------------------------------------------------------"
     printf "     Poll %-8s | HA %-8s | Every %ss\n" \
         "$poll_time_seconds" "$ha_time_seconds" "$next_check_interval"
-    printf "     Updated %s | %s\n" "$(nowplaying_updated_relative)" "$(meeting_status_label)"
+    printf "     Updated %s | Up to date\n" "$(nowplaying_updated_relative)"
     # printf "     Timing: Music %dms | Browser %dms | VLC %dms | HA %dms | Sleep %dms\n" "$profile_music_ms" "$profile_browser_ms" "$profile_vlc_ms" "$profile_ha_network_ms" "$profile_sleep_ms"
     echo "     [Return/R] Refresh     [X] Restart     [Q] Quit"
 }

@@ -53,7 +53,10 @@ meeting_state=unknown
 [[ "$(display_media_status)" == Idle ]]
 meeting_state=on
 for media_status in Music YouTube Playing Video Paused; do
+    [[ "$(display_media_status)" == 'In a Meeting' ]]
+    meeting_state=off
     [[ "$(display_media_status)" == "$media_status" ]]
+    meeting_state=on
 done
 '''
 subprocess.run(['bash', '-c', program], env=dict(os.environ), check=True)
