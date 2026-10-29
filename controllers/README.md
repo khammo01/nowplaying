@@ -45,3 +45,7 @@ rg -n 'password:|token|webhook|192\\.168\\.|10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.
 ```
 
 The rectangle profile includes the small local `qmi8658` component it needs. The rotary profile uses its upstream rotary encoder and haptic components directly.
+
+### Meeting card volume
+
+While the rotary meeting card is visible, the wheel changes the Work Mac’s HiDock H1 hardware output by two percentage points per detent. Dismissing the card restores the selected media control mode. Run `scripts/install_btt_fast_paths.py` on the Work Mac after updating. The Home Assistant scripts `script.work_mac_hidock_volume_up` and `script.work_mac_hidock_volume_down` must call the corresponding BTT named triggers on the Work Mac. The helper targets HiDock H1 directly and preserves the default audio output.

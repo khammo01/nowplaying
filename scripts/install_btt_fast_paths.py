@@ -147,6 +147,8 @@ COMMANDS = {
 }
 
 NEW_TRIGGERS = {
+    "work_mac_hidock_volume_up": '"$HOME/NowPlaying/hidock_volume.sh" +2',
+    "work_mac_hidock_volume_down": '"$HOME/NowPlaying/hidock_volume.sh" -2',
     "mac_youtube_home": youtube_detached("home"),
     "music_shuffle_toggle": detached(
         f"/usr/bin/osascript {ROOT}/music_shuffle_toggle.applescript"

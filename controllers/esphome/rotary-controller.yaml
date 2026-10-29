@@ -6,14 +6,14 @@ substitutions:
   announcement_history_entity: sensor.nowplaying_announcement_history
   device_name: media-rotary-controller
   friendly_name: Media Rotary Controller
-  ui_version: "2026.10.21.92-video-conflict"
+  ui_version: "2026.10.29.1-meeting-volume"
 
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
   project:
     name: nagbot.media_rotary_controller
-    version: "2026.10.21.92-video-conflict"
+    version: "2026.10.29.1-meeting-volume"
   includes:
     - <driver/gpio.h>
     - <driver/usb_serial_jtag.h>
@@ -836,6 +836,13 @@ sensor:
           if (delta == 0 || id(screen_sleeping)) return;
           id(haptic_tick).execute();
           id(last_activity_ms) = millis();
+          // The visible meeting card owns the wheel, regardless of media mode.
+          if (id(work_meeting_active).state && !id(meeting_card_dismissed) &&
+              !lv_obj_has_flag(id(meeting_overlay), LV_OBJ_FLAG_HIDDEN)) {
+            if (delta > 0) id(meeting_output_volume_up).execute();
+            else id(meeting_output_volume_down).execute();
+            return;
+          }
           if (id(control_drawer_open)) {
             const int step = delta > 0 ? 1 : -1;
             id(control_mode_candidate) = (id(control_mode_candidate) + step + 5) % 5;
@@ -4072,6 +4079,42 @@ script:
       - delay: 240ms
       - lvgl.widget.hide: rotary_feedback_overlay
       - lambda: 'id(rotary_feedback_delta) = 0;'
+
+  - id: meeting_output_volume_up
+    mode: queued
+    then:
+      - homeassistant.action:
+          action: script.work_mac_hidock_volume_up
+      - script.execute:
+          id: show_meeting_output_volume_feedback
+          direction: 1
+
+  - id: meeting_output_volume_down
+    mode: queued
+    then:
+      - homeassistant.action:
+          action: script.work_mac_hidock_volume_down
+      - script.execute:
+          id: show_meeting_output_volume_feedback
+          direction: -1
+
+  - id: show_meeting_output_volume_feedback
+    mode: restart
+    parameters:
+      direction: int
+    then:
+      - lambda: |-
+          lv_label_set_text(id(rotary_feedback_title), "HiDock H1 output");
+          lv_label_set_text(id(rotary_feedback_primary), direction > 0 ? "Volume +2%" : "Volume -2%");
+          lv_obj_set_style_text_font(id(rotary_feedback_primary), id(font_title), LV_PART_MAIN);
+          lv_label_set_text(id(rotary_feedback_detail), "Meeting speaker");
+          lv_obj_set_style_opa(id(rotary_feedback_overlay), LV_OPA_COVER, LV_PART_MAIN);
+          lv_obj_clear_flag(id(rotary_feedback_overlay), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_move_foreground(id(rotary_feedback_overlay));
+      - delay: 760ms
+      - lambda: 'lv_obj_fade_out(id(rotary_feedback_overlay), 220, 0);'
+      - delay: 240ms
+      - lvgl.widget.hide: rotary_feedback_overlay
 
   - id: control_left
     mode: queued
