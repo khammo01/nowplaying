@@ -31,3 +31,7 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# HiDock meeting output-volume helper source.
+!/hidock_volume.sh
+!/hidock_volume.swift
