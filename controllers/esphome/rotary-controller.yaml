@@ -6,14 +6,14 @@ substitutions:
   announcement_history_entity: sensor.nowplaying_announcement_history
   device_name: media-rotary-controller
   friendly_name: Media Rotary Controller
-  ui_version: "2026.10.29.1-meeting-volume"
+  ui_version: "2026.10.29.2-volume-queue"
 
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
   project:
     name: nagbot.media_rotary_controller
-    version: "2026.10.29.1-meeting-volume"
+    version: "2026.10.29.2-volume-queue"
   includes:
     - <driver/gpio.h>
     - <driver/usb_serial_jtag.h>
@@ -839,8 +839,9 @@ sensor:
           // The visible meeting card owns the wheel, regardless of media mode.
           if (id(work_meeting_active).state && !id(meeting_card_dismissed) &&
               !lv_obj_has_flag(id(meeting_overlay), LV_OBJ_FLAG_HIDDEN)) {
-            if (delta > 0) id(meeting_output_volume_up).execute();
-            else id(meeting_output_volume_down).execute();
+            const int direction = delta > 0 ? 1 : -1;
+            for (int step = 0; step < abs(delta); step++)
+              id(meeting_output_volume_step).execute(direction);
             return;
           }
           if (id(control_drawer_open)) {
@@ -4071,6 +4072,7 @@ script:
                                      mode == 3 ? id(font_small) : id(font_title),
                                      LV_PART_MAIN);
           lv_label_set_text(id(rotary_feedback_detail), detail);
+          lv_anim_del(id(rotary_feedback_overlay), nullptr);
           lv_obj_set_style_opa(id(rotary_feedback_overlay), LV_OPA_COVER, LV_PART_MAIN);
           lv_obj_clear_flag(id(rotary_feedback_overlay), LV_OBJ_FLAG_HIDDEN);
           lv_obj_move_foreground(id(rotary_feedback_overlay));
@@ -4080,23 +4082,19 @@ script:
       - lvgl.widget.hide: rotary_feedback_overlay
       - lambda: 'id(rotary_feedback_delta) = 0;'
 
-  - id: meeting_output_volume_up
+  - id: meeting_output_volume_step
     mode: queued
+    max_runs: 100
+    parameters:
+      direction: int
     then:
       - homeassistant.action:
-          action: script.work_mac_hidock_volume_up
+          action: script.work_mac_hidock_volume_step
+          data:
+            direction: !lambda 'return direction > 0 ? std::string("up") : std::string("down");'
       - script.execute:
           id: show_meeting_output_volume_feedback
-          direction: 1
-
-  - id: meeting_output_volume_down
-    mode: queued
-    then:
-      - homeassistant.action:
-          action: script.work_mac_hidock_volume_down
-      - script.execute:
-          id: show_meeting_output_volume_feedback
-          direction: -1
+          direction: !lambda 'return direction;'
 
   - id: show_meeting_output_volume_feedback
     mode: restart
@@ -4105,9 +4103,10 @@ script:
     then:
       - lambda: |-
           lv_label_set_text(id(rotary_feedback_title), "HiDock H1 output");
-          lv_label_set_text(id(rotary_feedback_primary), direction > 0 ? "Volume +2%" : "Volume -2%");
+          lv_label_set_text(id(rotary_feedback_primary), direction > 0 ? "+5%" : "-5%");
           lv_obj_set_style_text_font(id(rotary_feedback_primary), id(font_title), LV_PART_MAIN);
           lv_label_set_text(id(rotary_feedback_detail), "Meeting speaker");
+          lv_anim_del(id(rotary_feedback_overlay), nullptr);
           lv_obj_set_style_opa(id(rotary_feedback_overlay), LV_OPA_COVER, LV_PART_MAIN);
           lv_obj_clear_flag(id(rotary_feedback_overlay), LV_OBJ_FLAG_HIDDEN);
           lv_obj_move_foreground(id(rotary_feedback_overlay));
@@ -4955,9 +4954,9 @@ lvgl:
           id: rotary_feedback_overlay
           hidden: true
           x: 0
-          y: 50
+          y: 0
           width: 360
-          height: 310
+          height: 360
           bg_opa: TRANSP
           border_width: 0
           pad_all: 0
@@ -4965,8 +4964,7 @@ lvgl:
           scrollbar_mode: 'OFF'
           widgets:
             - obj:
-                x: 92
-                y: 92
+                align: CENTER
                 width: 176
                 height: 176
                 radius: 88

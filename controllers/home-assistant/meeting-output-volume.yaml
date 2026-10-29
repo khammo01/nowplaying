@@ -1,19 +1,44 @@
-# Merge into Home Assistant's scripts configuration, or include as a package.
-# Requires rest_command.work_macbook to call the Work Mac's BTT named triggers.
+# All directions share one queued worker. Requires rest_command.work_macbook.
 script:
+  work_mac_hidock_volume_step:
+    alias: Work Mac - sequential HiDock H1 output volume
+    mode: queued
+    max: 100
+    fields:
+      direction:
+        required: true
+        selector:
+          select:
+            options:
+            - up
+            - down
+    sequence:
+    - condition: template
+      value_template: '{{ direction in [''up'',''down''] }}'
+    - action: rest_command.work_macbook
+      data:
+        trigger: '{{ ''work_mac_hidock_volume_'' ~ direction }}'
+    trace:
+      stored_traces: 100
   work_mac_hidock_volume_up:
     alias: Work Mac - HiDock H1 output volume up
     mode: queued
     max: 20
     sequence:
-      - action: rest_command.work_macbook
-        data:
-          trigger: work_mac_hidock_volume_up
+    - action: script.turn_on
+      target:
+        entity_id: script.work_mac_hidock_volume_step
+      data:
+        variables:
+          direction: up
   work_mac_hidock_volume_down:
     alias: Work Mac - HiDock H1 output volume down
     mode: queued
     max: 20
     sequence:
-      - action: rest_command.work_macbook
-        data:
-          trigger: work_mac_hidock_volume_down
+    - action: script.turn_on
+      target:
+        entity_id: script.work_mac_hidock_volume_step
+      data:
+        variables:
+          direction: down
